@@ -40,8 +40,9 @@ fs.readFile(reportPath, "utf8", async (err, data) => {
         });
 
         // Estrai namespace e repository dal campo ArtifactName
-        const [namespace, repoTag] = report.ArtifactName.split("/");
+        const [fullRegistry, repoTag] = report.ArtifactName.split("/");
         const [repository] = repoTag.split(":");
+        const namespace = fullRegistry === "docker.io" ? "library" : fullRegistry;
         const digest = report.Metadata.ImageID;
 
         // Call Docker Hub API to get tags
