@@ -1,15 +1,14 @@
 {
   "name": "project-action",
   "version": "1.0.0",
-  "description": "",
+  "description": "GitHub Action to read and print the content of a Trivy JSON report",
   "main": "index.js",
   "scripts": {
     "test": "echo \"Error: no test specified\" && exit 1"
   },
-  "keywords": [],
-  "author": "",
-  "license": "ISC",
   "dependencies": {
-    "@actions/core": "^1.10.1"
+    "@actions/core": "^1.10.0",
+    "axios": "^0.21.1"
   }
 }
+
