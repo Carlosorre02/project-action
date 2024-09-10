@@ -39,13 +39,15 @@ fs.readFile(reportPath, "utf8", async (err, data) => {
             }
         });
 
-        // Estrai namespace e repository correttamente dal campo ArtifactName
-        const [fullRegistry, repoTag] = report.ArtifactName.split("/");
+        // Log per verificare l'ArtifactName
         core.info(`ArtifactName: ${report.ArtifactName}`);
+        const [fullRegistry, repoTag] = report.ArtifactName.split("/");
         const [repository] = repoTag.split(":");
-        const namespace = fullRegistry === "docker.io" ? "library" : fullRegistry;
 
-        // Corretto URL senza digest
+        // Usa il namespace corretto
+        const namespace = "carlo02sorre"; 
+
+        // Corretto URL per recuperare i tag
         const url = `https://hub.docker.com/v2/repositories/${namespace}/${repository}/tags`;
         core.info(`Fetching tags from: ${url}`);
 
