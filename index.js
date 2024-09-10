@@ -19,6 +19,12 @@ fs.readFile(reportPath, "utf8", async (err, data) => {
         const report = JSON.parse(data);
         const artifactName = report.ArtifactName;
 
+        // Controlliamo se artifactName è definito
+        if (!artifactName) {
+            core.setFailed("ArtifactName is undefined or missing in the report.");
+            process.exit(1);
+        }
+
         core.info(`ArtifactName: ${artifactName}`);
 
         // Assumiamo che l'ArtifactName sia qualcosa come 'docker.io/carlo02sorre/demonode:main'
