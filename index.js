@@ -2,11 +2,19 @@ const fs = require("fs");  // Per lavorare con il file system
 const core = require("@actions/core");  // Per interagire con le GitHub Actions
 const axios = require("axios");  // Per effettuare richieste HTTP
 
-// Ottenere il percorso del report Trivy dall'input di GitHub Actions
+// Ottieni il percorso del report Trivy dall'input di GitHub Actions
 const reportPath = core.getInput("trivy-report");
+
+// Ottieni l'immagine base dalla variabile d'ambiente BASE_IMAGE
+const baseImage = process.env.BASE_IMAGE;
 
 if (!reportPath) {
     core.setFailed("Report path is required");
+    process.exit(1);
+}
+
+if (!baseImage) {
+    core.setFailed("BASE_IMAGE environment variable is missing.");
     process.exit(1);
 }
 
@@ -20,7 +28,7 @@ fs.readFile(reportPath, "utf8", async (err, data) => {
         const report = JSON.parse(data);
         const artifactName = report.ArtifactName;
 
-        // Controlliamo se artifactName è definito e stampiamo il report per verificarne il contenuto
+        // Log del report per verificarne il contenuto
         core.info(`Report: ${JSON.stringify(report, null, 2)}`);
 
         if (!artifactName) {
@@ -30,36 +38,36 @@ fs.readFile(reportPath, "utf8", async (err, data) => {
 
         core.info(`ArtifactName: ${artifactName}`);
 
-        // Aggiungiamo un controllo per il formato dell'ArtifactName
-        if (artifactName.includes("***")) {
-            core.setFailed("ArtifactName contains masked or incomplete data.");
+        // Usare l'immagine base
+        core.info(`Using Base Image: ${baseImage}`);
+
+        // Estrazione del namespace e repository dall'immagine base
+        const baseImageParts = baseImage.split("/");
+
+        if (baseImageParts.length < 2) {
+            core.setFailed(`Base Image format is invalid: ${baseImage}`);
             process.exit(1);
         }
 
-        // Verifica il formato corretto prima dello split
-        const parts = artifactName.split("/");
+        const namespace = baseImageParts[0];  // Prende il namespace dell'immagine
+        const repositoryWithTag = baseImageParts[1]; // Prende il repository con eventuale tag
+        const repository = repositoryWithTag.split(":")[0]; // Prende solo il repository senza il tag
 
-        if (parts.length < 3) {
-            core.setFailed(`ArtifactName is not in the expected format: ${artifactName}`);
-            process.exit(1);
-        }
-
-        const fullRegistry = parts[0]; // docker.io
-        const namespace = parts[1]; // carlo02sorre
-        const repositoryWithTag = parts[2]; // demonode:main
-        const repository = repositoryWithTag.split(":")[0]; // demonode
-
-        core.info(`Full Registry: ${fullRegistry}`);
         core.info(`Namespace: ${namespace}`);
         core.info(`Repository: ${repository}`);
 
-        // Corretto URL per recuperare i tag
+        // Costruzione dell'URL per chiamare l'API di Docker Hub
         const url = `https://hub.docker.com/v2/repositories/${namespace}/${repository}/tags`;
         core.info(`Fetching tags from: ${url}`);
 
         try {
             const response = await axios.get(url);
             const tags = response.data.results;
+
+            if (!tags.length) {
+                core.setFailed("No tags found for the specified repository.");
+                process.exit(1);
+            }
 
             core.info("Tags:");
             tags.forEach(tag => {
