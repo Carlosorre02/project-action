@@ -47,6 +47,7 @@ fs.readFile(reportPath, "utf8", async (err, data) => {
 
         // Call Docker Hub API to get tags
         const url = `https://hub.docker.com/v2/namespaces/${namespace}/repositories/${repository}/images/${digest}/tags?page=1&page_size=20`;
+        console.log(url);
         core.info(`Fetching tags from: ${url}`);
 
         try {
