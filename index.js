@@ -20,7 +20,9 @@ fs.readFile(reportPath, "utf8", async (err, data) => {
         const report = JSON.parse(data);
         const artifactName = report.ArtifactName;
 
-        // Controlliamo se artifactName è definito
+        // Controlliamo se artifactName è definito e stampiamo il report per verificarne il contenuto
+        core.info(`Report: ${JSON.stringify(report, null, 2)}`);
+
         if (!artifactName) {
             core.setFailed("ArtifactName is undefined or missing in the report.");
             process.exit(1);
