@@ -39,16 +39,14 @@ fs.readFile(reportPath, "utf8", async (err, data) => {
             }
         });
 
-        // Estrai namespace e repository dal campo ArtifactName
+        // Estrai namespace e repository correttamente dal campo ArtifactName
         const [fullRegistry, repoTag] = report.ArtifactName.split("/");
         const [repository] = repoTag.split(":");
         const namespace = fullRegistry === "docker.io" ? "library" : fullRegistry;
-        const digest = report.Metadata.ImageID;
 
-        // Call Docker Hub API to get tags
-        const url = `https://hub.docker.com/v2/namespaces/${namespace}/repositories/${repository}/images/${digest}/tags?page=1&page_size=20`;
+        // Corretto URL senza digest
+        const url = `https://hub.docker.com/v2/repositories/${namespace}/${repository}/tags`;
         core.info(`Fetching tags from: ${url}`);
-        core.info(${repoTag});
 
         try {
             const response = await axios.get(url);
@@ -56,7 +54,7 @@ fs.readFile(reportPath, "utf8", async (err, data) => {
 
             core.info("Tags:");
             tags.forEach(tag => {
-                core.info(`  Tag: ${tag.tag}, Is Current: ${tag.is_current}`);
+                core.info(`  Tag: ${tag.name}, Is Current: ${tag.is_current}`);
             });
         } catch (apiErr) {
             core.setFailed(`Error fetching tags from Docker Hub: ${apiErr.message}`);
