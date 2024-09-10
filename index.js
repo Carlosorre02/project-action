@@ -27,6 +27,12 @@ fs.readFile(reportPath, "utf8", async (err, data) => {
 
         core.info(`ArtifactName: ${artifactName}`);
 
+        // Aggiungiamo un controllo per il formato dell'ArtifactName
+        if (artifactName.includes("***")) {
+            core.setFailed("ArtifactName contains masked or incomplete data.");
+            process.exit(1);
+        }
+
         // Assumiamo che l'ArtifactName sia qualcosa come 'docker.io/carlo02sorre/demonode:main'
         const parts = artifactName.split("/");
 
