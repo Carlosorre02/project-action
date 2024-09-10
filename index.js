@@ -2,19 +2,11 @@ const fs = require("fs");  // Per lavorare con il file system
 const core = require("@actions/core");  // Per interagire con le GitHub Actions
 const axios = require("axios");  // Per effettuare richieste HTTP
 
-// Ottieni il percorso del report Trivy dall'input di GitHub Actions
+// Ottenere il percorso del report Trivy dall'input di GitHub Actions
 const reportPath = core.getInput("trivy-report");
-
-// Ottieni l'immagine base dalla variabile d'ambiente BASE_IMAGE
-const baseImage = process.env.BASE_IMAGE;
 
 if (!reportPath) {
     core.setFailed("Report path is required");
-    process.exit(1);
-}
-
-if (!baseImage) {
-    core.setFailed("BASE_IMAGE environment variable is missing.");
     process.exit(1);
 }
 
@@ -36,22 +28,23 @@ fs.readFile(reportPath, "utf8", async (err, data) => {
             process.exit(1);
         }
 
-        core.info(`ArtifactName: ${artifactName}`);
+        core.info(`ArtifactName (Base Image): ${artifactName}`);
 
-        // Usare l'immagine base
-        core.info(`Using Base Image: ${baseImage}`);
+        // Usare ArtifactName per determinare il namespace e il repository
+        const parts = artifactName.split(":")[0].split("/");
 
-        // Estrazione del namespace e repository dall'immagine base
-        const baseImageParts = baseImage.split("/");
-
-        if (baseImageParts.length < 2) {
-            core.setFailed(`Base Image format is invalid: ${baseImage}`);
+        if (parts.length < 1) {
+            core.setFailed(`ArtifactName is not in the expected format: ${artifactName}`);
             process.exit(1);
         }
 
-        const namespace = baseImageParts[0];  // Prende il namespace dell'immagine
-        const repositoryWithTag = baseImageParts[1]; // Prende il repository con eventuale tag
-        const repository = repositoryWithTag.split(":")[0]; // Prende solo il repository senza il tag
+        let namespace = "library";  // Impostazione predefinita per immagini Docker ufficiali
+        let repository = parts[0];
+
+        if (parts.length === 2) {
+            namespace = parts[0];
+            repository = parts[1];
+        }
 
         core.info(`Namespace: ${namespace}`);
         core.info(`Repository: ${repository}`);
