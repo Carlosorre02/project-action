@@ -1,3 +1,14 @@
+const fs = require("fs");  // Per lavorare con il file system
+const core = require("@actions/core");  // Per interagire con le GitHub Actions
+const axios = require("axios");  // Per effettuare richieste HTTP
+
+const reportPath = core.getInput("trivy-report");
+
+if (!reportPath) {
+    core.setFailed("Report path is required");
+    process.exit(1);
+}
+
 fs.readFile(reportPath, "utf8", async (err, data) => {
     if (err) {
         core.setFailed(`Error reading the report: ${err.message}`);
@@ -12,7 +23,7 @@ fs.readFile(reportPath, "utf8", async (err, data) => {
 
         // Assumiamo che l'ArtifactName sia qualcosa come 'docker.io/carlo02sorre/demonode:main'
         const parts = artifactName.split("/");
-        
+
         if (parts.length < 2) {
             core.setFailed("ArtifactName is not in the expected format");
             process.exit(1);
