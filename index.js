@@ -41,6 +41,7 @@ fs.readFile(reportPath, "utf8", async (err, data) => {
 
         // Estrai namespace e repository correttamente dal campo ArtifactName
         const [fullRegistry, repoTag] = report.ArtifactName.split("/");
+        core.info(`ArtifactName: ${report.ArtifactName}`);
         const [repository] = repoTag.split(":");
         const namespace = fullRegistry === "docker.io" ? "library" : fullRegistry;
 
