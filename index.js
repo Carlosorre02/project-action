@@ -39,10 +39,14 @@ fs.readFile(reportPath, "utf8", async (err, data) => {
             }
         });
 
-        // Log per verificare l'ArtifactName
+        // Log per verificare l'ArtifactName e altri dettagli
         core.info(`ArtifactName: ${report.ArtifactName}`);
         const [fullRegistry, repoTag] = report.ArtifactName.split("/");
         const [repository] = repoTag.split(":");
+
+        core.info(`Full Registry: ${fullRegistry}`);
+        core.info(`Repo Tag: ${repoTag}`);
+        core.info(`Repository: ${repository}`);
 
         // Usa il namespace corretto
         const namespace = "carlo02sorre"; 
