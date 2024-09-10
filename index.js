@@ -36,18 +36,18 @@ fs.readFile(reportPath, "utf8", async (err, data) => {
             process.exit(1);
         }
 
-        // Assumiamo che l'ArtifactName sia qualcosa come 'docker.io/carlo02sorre/demonode:main'
+        // Verifica il formato corretto prima dello split
         const parts = artifactName.split("/");
 
-        if (parts.length < 2) {
-            core.setFailed("ArtifactName is not in the expected format");
+        if (parts.length < 3) {
+            core.setFailed(`ArtifactName is not in the expected format: ${artifactName}`);
             process.exit(1);
         }
 
         const fullRegistry = parts[0]; // docker.io
-        const repoTag = parts[1]; // carlo02sorre/demonode:main
-        const [namespace, repositoryWithTag] = repoTag.split("/"); // carlo02sorre/demonode:main
-        const [repository] = repositoryWithTag.split(":"); // demonode
+        const namespace = parts[1]; // carlo02sorre
+        const repositoryWithTag = parts[2]; // demonode:main
+        const repository = repositoryWithTag.split(":")[0]; // demonode
 
         core.info(`Full Registry: ${fullRegistry}`);
         core.info(`Namespace: ${namespace}`);
