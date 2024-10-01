@@ -1,6 +1,7 @@
-const fs = require("fs");  // Per lavorare con il file system
-const core = require("@actions/core");  // Per interagire con le GitHub Actions
-const axios = require("axios");  // Per effettuare richieste HTTP
+const fs = require("fs");
+const core = require("@actions/core");
+const axios = require("axios");
+const { execSync } = require("child_process");  // Per eseguire comandi shell
 
 // Ottenere il percorso del report Trivy dall'input di GitHub Actions
 const reportPath = core.getInput("trivy-report");
@@ -63,9 +64,14 @@ fs.readFile(reportPath, "utf8", async (err, data) => {
             }
 
             core.info("Tags:");
-            tags.forEach(tag => {
-                core.info(`  Tag: ${tag.name}, Is Current: ${tag.is_current}`);
-            });
+            for (const tag of tags) {
+                const tagName = tag.name;
+                core.info(`  Tag: ${tagName}, Is Current: ${tag.is_current}`);
+
+                // Esegui la scansione Trivy per ogni tag
+                await runTrivyScan(`${namespace}/${repository}:${tagName}`);
+            }
+
         } catch (apiErr) {
             core.setFailed(`Error fetching tags from Docker Hub: ${apiErr.message}`);
             process.exit(1);
@@ -76,3 +82,19 @@ fs.readFile(reportPath, "utf8", async (err, data) => {
         process.exit(1);
     }
 });
+
+// Funzione per eseguire Trivy su una specifica immagine
+async function runTrivyScan(image) {
+    core.info(`Running Trivy scan for image: ${image}`);
+    try {
+        const outputFilePath = `trivy-report-${image.replace(/[:/]/g, "_")}.json`;
+
+        // Esegue il comando Trivy
+        execSync(`trivy image --format json --output ${outputFilePath} --severity CRITICAL,HIGH ${image}`, { stdio: "inherit" });
+
+        core.info(`Trivy scan completed for image: ${image}, report saved to ${outputFilePath}`);
+        core.setOutput(`trivy-report-${image}`, outputFilePath);
+    } catch (err) {
+        core.setFailed(`Failed to run Trivy scan for ${image}: ${err.message}`);
+    }
+}
