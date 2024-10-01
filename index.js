@@ -12,7 +12,7 @@ if (!reportPath) {
 
 fs.readFile(reportPath, "utf8", async (err, data) => {
     if (err) {
-        core.setFailed(Error reading the report: ${err.message});
+        core.setFailed(`Error reading the report: ${err.message}`);
         process.exit(1);
     }
 
@@ -21,20 +21,20 @@ fs.readFile(reportPath, "utf8", async (err, data) => {
         const artifactName = report.ArtifactName;
 
         // Log del report per verificarne il contenuto
-        core.info(Report: ${JSON.stringify(report, null, 2)});
+        core.info(`Report: ${JSON.stringify(report, null, 2)}`);
 
         if (!artifactName) {
             core.setFailed("ArtifactName is undefined or missing in the report.");
             process.exit(1);
         }
 
-        core.info(ArtifactName (Base Image): ${artifactName});
+        core.info(`ArtifactName (Base Image): ${artifactName}`);
 
         // Usare ArtifactName per determinare il namespace e il repository
         const parts = artifactName.split(":")[0].split("/");
 
         if (parts.length < 1) {
-            core.setFailed(ArtifactName is not in the expected format: ${artifactName});
+            core.setFailed(`ArtifactName is not in the expected format: ${artifactName}`);
             process.exit(1);
         }
 
@@ -46,12 +46,12 @@ fs.readFile(reportPath, "utf8", async (err, data) => {
             repository = parts[1];
         }
 
-        core.info(Namespace: ${namespace});
-        core.info(Repository: ${repository});
+        core.info(`Namespace: ${namespace}`);
+        core.info(`Repository: ${repository}`);
 
         // Costruzione dell'URL per chiamare l'API di Docker Hub
-        const url = https://hub.docker.com/v2/repositories/${namespace}/${repository}/tags;
-        core.info(Fetching tags from: ${url});
+        const url = `https://hub.docker.com/v2/repositories/${namespace}/${repository}/tags`;
+        core.info(`Fetching tags from: ${url}`);
 
         try {
             const response = await axios.get(url);
@@ -64,15 +64,15 @@ fs.readFile(reportPath, "utf8", async (err, data) => {
 
             core.info("Tags:");
             tags.forEach(tag => {
-                core.info(  Tag: ${tag.name}, Is Current: ${tag.is_current});
+                core.info(`  Tag: ${tag.name}, Is Current: ${tag.is_current}`);
             });
         } catch (apiErr) {
-            core.setFailed(Error fetching tags from Docker Hub: ${apiErr.message});
+            core.setFailed(`Error fetching tags from Docker Hub: ${apiErr.message}`);
             process.exit(1);
         }
 
     } catch (parseErr) {
-        core.setFailed(Error parsing the report: ${parseErr.message});
+        core.setFailed(`Error parsing the report: ${parseErr.message}`);
         process.exit(1);
     }
 });
