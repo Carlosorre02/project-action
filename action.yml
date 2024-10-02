@@ -10,4 +10,6 @@ runs:
   using: 'node16'  # Usa Node.js 16 o successivo
   steps:
     - run: npm install  # Installa le dipendenze come semver e axios
+      shell: bash  # Specifica la shell da usare
     - run: node index.js  # Esegui il file index.js
+      shell: bash  # Specifica la shell da usare
