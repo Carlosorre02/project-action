@@ -9,9 +9,3 @@ inputs:
 runs:
   using: 'node12'
   main: 'index.js'
-
-  # Aggiunta dello step per installare le dipendenze
-  pre:
-    - run: npm install
-
-
