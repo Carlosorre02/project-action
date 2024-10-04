@@ -5,5 +5,5 @@ inputs:
     description: 'Path to the Trivy JSON report'
     required: true
 runs:
-  using: 'node16'  # Aggiornato a node16
-  main: 'dist/index.js'  # Aggiornato per puntare al file bundle precompilato
+  using: 'node16'
+  main: 'index.js'  # Ritorna al file originale
