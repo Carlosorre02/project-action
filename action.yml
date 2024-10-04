@@ -5,9 +5,5 @@ inputs:
     description: 'Path to the Trivy JSON report'
     required: true
 runs:
-  using: 'node16'
-  steps:
-    - run: npm install  # Installa tutte le dipendenze elencate nel package.json
-      shell: bash  # Specifica la shell da usare
-    - run: node index.js  # Esegui lo script dopo aver installato le dipendenze
-      shell: bash  # Specifica la shell da usare
+  using: 'node12'
+  main: 'index.js'
