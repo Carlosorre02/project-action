@@ -6,4 +6,6 @@ inputs:
     required: true
 runs:
   using: 'node16'
-  main: 'index.js'  # Ritorna al file originale
+  steps:
+    - run: npm install  # Installa tutte le dipendenze elencate nel package.json
+    - run: node index.js  # Esegui lo script dopo aver installato le dipendenze
