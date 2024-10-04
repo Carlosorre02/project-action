@@ -24,11 +24,42 @@ fs.readFile(reportPath, "utf8", async (err, data) => {
             process.exit(1);
         }
 
+        // Log dell'immagine base
         core.info(`Base Image: ${artifactName}`);
 
+        // Funzione per estrarre informazioni rilevanti da ogni vulnerabilità
+        const extractVulnInfo = (vulnerabilities) => {
+            return vulnerabilities.map(vuln => {
+                return {
+                    Target: vuln.Target,
+                    PkgName: vuln.PkgName,
+                    VulnerabilityID: vuln.VulnerabilityID,
+                    Severity: vuln.Severity,
+                    InstalledVersion: vuln.InstalledVersion,
+                    FixedVersion: vuln.FixedVersion || "No fix available",
+                };
+            });
+        };
+
+        // Iterare attraverso i risultati del report
+        report.Results.forEach(result => {
+            core.info(`Target: ${result.Target}`);
+            const relevantVulns = extractVulnInfo(result.Vulnerabilities || []);
+            
+            relevantVulns.forEach(vulnInfo => {
+                core.info(`Package: ${vulnInfo.PkgName}`);
+                core.info(`Vulnerability ID: ${vulnInfo.VulnerabilityID}`);
+                core.info(`Severity: ${vulnInfo.Severity}`);
+                core.info(`Installed Version: ${vulnInfo.InstalledVersion}`);
+                core.info(`Fixed Version: ${vulnInfo.FixedVersion}`);
+                core.info("---");
+            });
+        });
+
+        // Usare ArtifactName per determinare il namespace e il repository
         const parts = artifactName.split(":")[0].split("/");
 
-        let namespace = "library";
+        let namespace = "library";  // Impostazione predefinita per immagini Docker ufficiali
         let repository = parts[0];
 
         if (parts.length === 2) {
