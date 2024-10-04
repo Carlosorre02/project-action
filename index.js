@@ -1,6 +1,7 @@
 const fs = require("fs");
 const core = require("@actions/core");
 const axios = require("axios");
+const semver = require("semver");  // Importa la libreria semver
 
 const reportPath = core.getInput("trivy-report");
 
@@ -27,34 +28,15 @@ fs.readFile(reportPath, "utf8", async (err, data) => {
         // Log dell'immagine base
         core.info(`Base Image: ${artifactName}`);
 
-        // Funzione per estrarre informazioni rilevanti da ogni vulnerabilità
-        const extractVulnInfo = (vulnerabilities) => {
-            return vulnerabilities.map(vuln => {
-                return {
-                    Target: vuln.Target,
-                    PkgName: vuln.PkgName,
-                    VulnerabilityID: vuln.VulnerabilityID,
-                    Severity: vuln.Severity,
-                    InstalledVersion: vuln.InstalledVersion,
-                    FixedVersion: vuln.FixedVersion || "No fix available",
-                };
-            });
-        };
+        // Estrazione della versione dell'immagine base (parte dopo ':')
+        const baseImageVersion = artifactName.split(":")[1];
 
-        // Iterare attraverso i risultati del report
-        report.Results.forEach(result => {
-            core.info(`Target: ${result.Target}`);
-            const relevantVulns = extractVulnInfo(result.Vulnerabilities || []);
-            
-            relevantVulns.forEach(vulnInfo => {
-                core.info(`Package: ${vulnInfo.PkgName}`);
-                core.info(`Vulnerability ID: ${vulnInfo.VulnerabilityID}`);
-                core.info(`Severity: ${vulnInfo.Severity}`);
-                core.info(`Installed Version: ${vulnInfo.InstalledVersion}`);
-                core.info(`Fixed Version: ${vulnInfo.FixedVersion}`);
-                core.info("---");
-            });
-        });
+        if (!baseImageVersion) {
+            core.setFailed("Base image version is missing.");
+            process.exit(1);
+        }
+
+        core.info(`Base Image Version: ${baseImageVersion}`);
 
         // Usare ArtifactName per determinare il namespace e il repository
         const parts = artifactName.split(":")[0].split("/");
@@ -103,12 +85,24 @@ fs.readFile(reportPath, "utf8", async (err, data) => {
             return tags;
         };
 
-        // Ottenere i tag "alpine" e stamparli
+        // Ottenere i tag "alpine"
         const alpineTags = await getAlpineTags(namespace, repository);
 
         if (alpineTags.length > 0) {
-            core.info("Alpine Tags:");
-            alpineTags.forEach(tag => core.info(`  Tag: ${tag}`));
+            core.info("Filtering Alpine Tags that are newer than the base image version:");
+
+            // Filtrare i tag che sono versioni successive alla versione base
+            const newerTags = alpineTags.filter(tag => {
+                const tagVersion = tag.split("-")[0];  // Estrae la parte della versione del tag
+                return semver.valid(tagVersion) && semver.gt(tagVersion, baseImageVersion);
+            });
+
+            if (newerTags.length > 0) {
+                core.info("Newer Alpine Tags:");
+                newerTags.forEach(tag => core.info(`  Tag: ${tag}`));
+            } else {
+                core.info("No newer tags found.");
+            }
         } else {
             core.info("No Alpine tags found.");
         }
