@@ -114,14 +114,28 @@ fs.readFile(reportPath, "utf8", async (err, data) => {
         const currentTag = artifactName;  // L'immagine base
         const alpineTags = await getAlpineTags(namespace, repository, currentTag);
 
+        // Funzione di ordinamento avanzata
+        const sortTags = (tags) => {
+            return tags.sort((a, b) => {
+                // Estrai versione principale e versione Alpine
+                const [versionA, alpineA] = a.split("-alpine");
+                const [versionB, alpineB] = b.split("-alpine");
+
+                // Ordina per versione semver
+                const semverCompare = semver.compare(versionA, versionB);
+                if (semverCompare !== 0) return semverCompare;
+
+                // Se le versioni semver sono uguali, ordina per versione Alpine (se presente)
+                const alpineVersionA = alpineA ? alpineA.replace('.', '') : ''; // Rimuovi il punto per confrontare come numero
+                const alpineVersionB = alpineB ? alpineB.replace('.', '') : '';
+
+                return alpineVersionA.localeCompare(alpineVersionB, undefined, { numeric: true });
+            });
+        };
+
         // Stampa dei tag ottenuti e ordinamento
         if (alpineTags.length > 0) {
-            // Ordina i tag in base alla versione semver
-            const sortedTags = alpineTags.sort((a, b) => {
-                const versionA = a.split("-alpine")[0];
-                const versionB = b.split("-alpine")[0];
-                return semver.compare(versionA, versionB);
-            });
+            const sortedTags = sortTags(alpineTags);
 
             core.info("Alpine Tags ordinati:");
             sortedTags.forEach(tag => core.info(`  Tag: ${tag}`));
