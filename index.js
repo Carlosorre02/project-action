@@ -1,6 +1,7 @@
 const fs = require("fs");
 const core = require("@actions/core");
 const axios = require("axios");
+const semver = require('semver');
 
 const reportPath = core.getInput("trivy-report");
 
@@ -71,7 +72,7 @@ fs.readFile(reportPath, "utf8", async (err, data) => {
         core.info(`Repository: ${repository}`);
 
         // Funzione per ottenere tutti i tag che contengono "alpine" e attraversare le pagine
-        const getAlpineTags = async (namespace, repository) => {
+        const getAlpineTags = async (namespace, repository, currentTag) => {
             let url = `https://hub.docker.com/v2/repositories/${namespace}/${repository}/tags/?name=alpine&page_size=100`;
             let tags = [];
 
@@ -85,9 +86,13 @@ fs.readFile(reportPath, "utf8", async (err, data) => {
                         process.exit(1);
                     }
 
-                    // Filtra e aggiungi solo i tag che contengono "alpine"
+                    // Estrazione della versione da "node:18.20.2-alpine" -> "18.20.2"
+                    const currentVersion = currentTag.split(":")[1].split("-alpine")[0];
+
+                    // Filtra e aggiungi solo i tag che contengono "alpine" e che sono versioni maggiori di quella corrente
                     pageTags.forEach(tag => {
-                        if (tag.name.includes("alpine")) {
+                        const tagVersion = tag.name.split("-alpine")[0]; // Estrarre la parte di versione
+                        if (tag.name.includes("alpine") && semver.gt(tagVersion, currentVersion)) {
                             tags.push(tag.name);
                         }
                     });
@@ -103,14 +108,16 @@ fs.readFile(reportPath, "utf8", async (err, data) => {
             return tags;
         };
 
-        // Ottenere i tag "alpine" e stamparli
-        const alpineTags = await getAlpineTags(namespace, repository);
+        // Esempio di chiamata alla funzione
+        const currentTag = artifactName;  // L'immagine base
+        const alpineTags = await getAlpineTags(namespace, repository, currentTag);
 
+        // Stampa dei tag ottenuti
         if (alpineTags.length > 0) {
-            core.info("Alpine Tags:");
+            core.info("Alpine Tags più recenti:");
             alpineTags.forEach(tag => core.info(`  Tag: ${tag}`));
         } else {
-            core.info("No Alpine tags found.");
+            core.info("Non sono stati trovati tag Alpine più recenti.");
         }
 
     } catch (parseErr) {
