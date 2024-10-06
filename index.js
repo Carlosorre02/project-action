@@ -17,48 +17,100 @@ fs.readFile(reportPath, "utf8", async (err, data) => {
 
     try {
         const report = JSON.parse(data);
-        const results = report.Results;
+        const artifactName = report.ArtifactName;
 
-        results.forEach(result => {
+        if (!artifactName) {
+            core.setFailed("ArtifactName is undefined or missing in the report.");
+            process.exit(1);
+        }
+
+        // Log dell'immagine base
+        core.info(`Base Image: ${artifactName}`);
+
+        // Funzione per estrarre informazioni rilevanti da ogni vulnerabilità
+        const extractVulnInfo = (vulnerabilities) => {
+            return vulnerabilities.map(vuln => {
+                return {
+                    Target: vuln.Target,
+                    PkgName: vuln.PkgName,
+                    VulnerabilityID: vuln.VulnerabilityID,
+                    Severity: vuln.Severity,
+                    InstalledVersion: vuln.InstalledVersion,
+                    FixedVersion: vuln.FixedVersion || "No fix available",
+                };
+            });
+        };
+
+        // Iterare attraverso i risultati del report
+        report.Results.forEach(result => {
             core.info(`Target: ${result.Target}`);
-            core.info(`Class: ${result.Class}`);
-            core.info(`Type: ${result.Type}`);
-
-            if (result.Vulnerabilities) {
-                result.Vulnerabilities.forEach(vuln => {
-                    core.info(`  VulnerabilityID: ${vuln.VulnerabilityID}`);
-                    core.info(`  PkgName: ${vuln.PkgName}`);
-                    core.info(`  InstalledVersion: ${vuln.InstalledVersion}`);
-                    core.info(`  FixedVersion: ${vuln.FixedVersion}`);
-                    core.info(`  Severity: ${vuln.Severity}`);
-                    core.info(`  Title: ${vuln.Title}`);
-                    core.info(`  Description: ${vuln.Description}`);
-                    core.info(`  PrimaryURL: ${vuln.PrimaryURL}`);
-                    core.info("---------------------------------");
-                });
-            }
+            const relevantVulns = extractVulnInfo(result.Vulnerabilities || []);
+            
+            relevantVulns.forEach(vulnInfo => {
+                core.info(`Package: ${vulnInfo.PkgName}`);
+                core.info(`Vulnerability ID: ${vulnInfo.VulnerabilityID}`);
+                core.info(`Severity: ${vulnInfo.Severity}`);
+                core.info(`Installed Version: ${vulnInfo.InstalledVersion}`);
+                core.info(`Fixed Version: ${vulnInfo.FixedVersion}`);
+                core.info("---");
+            });
         });
 
-        // Estrai namespace e repository correttamente dal campo ArtifactName
-        const [fullRegistry, repoTag] = report.ArtifactName.split("/");
-        const [repository] = repoTag.split(":");
-        const namespace = fullRegistry === "docker.io" ? "library" : fullRegistry;
+        // Usare ArtifactName per determinare il namespace e il repository
+        const parts = artifactName.split(":")[0].split("/");
 
-        // Corretto URL senza digest
-        const url = `https://hub.docker.com/v2/repositories/${namespace}/${repository}/tags`;
-        core.info(`Fetching tags from: ${url}`);
+        let namespace = "library";  // Impostazione predefinita per immagini Docker ufficiali
+        let repository = parts[0];
 
-        try {
-            const response = await axios.get(url);
-            const tags = response.data.results;
+        if (parts.length === 2) {
+            namespace = parts[0];
+            repository = parts[1];
+        }
 
-            core.info("Tags:");
-            tags.forEach(tag => {
-                core.info(`  Tag: ${tag.name}, Is Current: ${tag.is_current}`);
-            });
-        } catch (apiErr) {
-            core.setFailed(`Error fetching tags from Docker Hub: ${apiErr.message}`);
-            process.exit(1);
+        core.info(`Namespace: ${namespace}`);
+        core.info(`Repository: ${repository}`);
+
+        // Funzione per ottenere tutti i tag che contengono "alpine" e attraversare le pagine
+        const getAlpineTags = async (namespace, repository) => {
+            let url = `https://hub.docker.com/v2/repositories/${namespace}/${repository}/tags/?name=alpine&page_size=100`;
+            let tags = [];
+
+            while (url) {
+                try {
+                    const response = await axios.get(url);
+                    const pageTags = response.data.results;
+
+                    if (!pageTags.length) {
+                        core.setFailed("No tags found for the specified repository.");
+                        process.exit(1);
+                    }
+
+                    // Filtra e aggiungi solo i tag che contengono "alpine"
+                    pageTags.forEach(tag => {
+                        if (tag.name.includes("alpine")) {
+                            tags.push(tag.name);
+                        }
+                    });
+
+                    // Se c'è una pagina successiva, aggiornare l'URL per ottenere la pagina successiva
+                    url = response.data.next;
+                } catch (apiErr) {
+                    core.setFailed(`Error fetching tags from Docker Hub: ${apiErr.message}`);
+                    process.exit(1);
+                }
+            }
+
+            return tags;
+        };
+
+        // Ottenere i tag "alpine" e stamparli
+        const alpineTags = await getAlpineTags(namespace, repository);
+
+        if (alpineTags.length > 0) {
+            core.info("Alpine Tags:");
+            alpineTags.forEach(tag => core.info(`  Tag: ${tag}`));
+        } else {
+            core.info("No Alpine tags found.");
         }
 
     } catch (parseErr) {
