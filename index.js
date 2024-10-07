@@ -153,11 +153,34 @@ fs.readFile(reportPath, "utf8", async (err, data) => {
                 });
             };
 
+            const parseTrivyReport = (image) => {
+                const reportPath = `trivy-report-${image}.json`;
+                const reportData = fs.readFileSync(reportPath, "utf8");
+                const report = JSON.parse(reportData);
+
+                report.Results.forEach(result => {
+                    core.info(`Target: ${result.Target}`);
+                    const vulnerabilities = result.Vulnerabilities || [];
+
+                    vulnerabilities.forEach(vuln => {
+                        core.info(`Package: ${vuln.PkgName}`);
+                        core.info(`Vulnerability ID: ${vuln.VulnerabilityID}`);
+                        core.info(`Severity: ${vuln.Severity}`);
+                        core.info(`Installed Version: ${vuln.InstalledVersion}`);
+                        core.info(`Fixed Version: ${vuln.FixedVersion || "No fix available"}`);
+                        core.info("---");
+                    });
+                });
+            };
+
             for (const image of top5Images) {
                 core.info(`Inizio scansione per immagine: ${image}`);
                 try {
                     await trivyScan(image);
                     core.info(`Scansione completata per immagine: ${image}`);
+
+                    // Parse and display the Trivy report
+                    parseTrivyReport(image);
                 } catch (err) {
                     core.setFailed(`Errore nella scansione di ${image}: ${err}`);
                 }
