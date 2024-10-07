@@ -2,6 +2,7 @@ const fs = require("fs");
 const core = require("@actions/core");
 const axios = require("axios");
 const semver = require('semver');
+const { exec } = require('child_process');
 
 const reportPath = core.getInput("trivy-report");
 
@@ -12,7 +13,7 @@ if (!reportPath) {
 
 fs.readFile(reportPath, "utf8", async (err, data) => {
     if (err) {
-        core.setFailed(Error reading the report: ${err.message});
+        core.setFailed(`Error reading the report: ${err.message}`);
         process.exit(1);
     }
 
@@ -26,7 +27,7 @@ fs.readFile(reportPath, "utf8", async (err, data) => {
         }
 
         // Log dell'immagine base
-        core.info(Base Image: ${artifactName});
+        core.info(`Base Image: ${artifactName}`);
 
         // Funzione per estrarre informazioni rilevanti da ogni vulnerabilità
         const extractVulnInfo = (vulnerabilities) => {
@@ -44,15 +45,15 @@ fs.readFile(reportPath, "utf8", async (err, data) => {
 
         // Iterare attraverso i risultati del report
         report.Results.forEach(result => {
-            core.info(Target: ${result.Target});
+            core.info(`Target: ${result.Target}`);
             const relevantVulns = extractVulnInfo(result.Vulnerabilities || []);
-            
+
             relevantVulns.forEach(vulnInfo => {
-                core.info(Package: ${vulnInfo.PkgName});
-                core.info(Vulnerability ID: ${vulnInfo.VulnerabilityID});
-                core.info(Severity: ${vulnInfo.Severity});
-                core.info(Installed Version: ${vulnInfo.InstalledVersion});
-                core.info(Fixed Version: ${vulnInfo.FixedVersion});
+                core.info(`Package: ${vulnInfo.PkgName}`);
+                core.info(`Vulnerability ID: ${vulnInfo.VulnerabilityID}`);
+                core.info(`Severity: ${vulnInfo.Severity}`);
+                core.info(`Installed Version: ${vulnInfo.InstalledVersion}`);
+                core.info(`Fixed Version: ${vulnInfo.FixedVersion}`);
                 core.info("---");
             });
         });
@@ -68,12 +69,12 @@ fs.readFile(reportPath, "utf8", async (err, data) => {
             repository = parts[1];
         }
 
-        core.info(Namespace: ${namespace});
-        core.info(Repository: ${repository});
+        core.info(`Namespace: ${namespace}`);
+        core.info(`Repository: ${repository}`);
 
         // Funzione per ottenere tutti i tag che contengono "alpine" e attraversare le pagine
         const getAlpineTags = async (namespace, repository, currentTag) => {
-            let url = https://hub.docker.com/v2/repositories/${namespace}/${repository}/tags/?name=alpine&page_size=100;
+            let url = `https://hub.docker.com/v2/repositories/${namespace}/${repository}/tags/?name=alpine&page_size=100`;
             let tags = [];
 
             while (url) {
@@ -92,7 +93,7 @@ fs.readFile(reportPath, "utf8", async (err, data) => {
                     // Filtra e aggiungi solo i tag che contengono "alpine" e che sono versioni valide semver maggiori della corrente
                     pageTags.forEach(tag => {
                         const tagVersion = tag.name.split("-alpine")[0]; // Estrarre la parte di versione
-                        
+
                         // Controllare che il tag rappresenti una versione semver valida
                         if (tag.name.includes("alpine") && semver.valid(tagVersion) && semver.gt(tagVersion, currentVersion)) {
                             tags.push(tag.name);
@@ -102,7 +103,7 @@ fs.readFile(reportPath, "utf8", async (err, data) => {
                     // Se c'è una pagina successiva, aggiornare l'URL per ottenere la pagina successiva
                     url = response.data.next;
                 } catch (apiErr) {
-                    core.setFailed(Error fetching tags from Docker Hub: ${apiErr.message});
+                    core.setFailed(`Error fetching tags from Docker Hub: ${apiErr.message}`);
                     process.exit(1);
                 }
             }
@@ -117,16 +118,13 @@ fs.readFile(reportPath, "utf8", async (err, data) => {
         // Funzione di ordinamento avanzata
         const sortTags = (tags) => {
             return tags.sort((a, b) => {
-                // Estrai versione principale e versione Alpine
                 const [versionA, alpineA] = a.split("-alpine");
                 const [versionB, alpineB] = b.split("-alpine");
 
-                // Ordina per versione semver
                 const semverCompare = semver.compare(versionA, versionB);
                 if (semverCompare !== 0) return semverCompare;
 
-                // Se le versioni semver sono uguali, ordina per versione Alpine (se presente)
-                const alpineVersionA = alpineA ? alpineA.replace('.', '') : ''; // Rimuovi il punto per confrontare come numero
+                const alpineVersionA = alpineA ? alpineA.replace('.', '') : '';
                 const alpineVersionB = alpineB ? alpineB.replace('.', '') : '';
 
                 return alpineVersionA.localeCompare(alpineVersionB, undefined, { numeric: true });
@@ -136,15 +134,39 @@ fs.readFile(reportPath, "utf8", async (err, data) => {
         // Stampa dei tag ottenuti e ordinamento
         if (alpineTags.length > 0) {
             const sortedTags = sortTags(alpineTags);
-
             core.info("Alpine Tags ordinati:");
-            sortedTags.forEach(tag => core.info(  Tag: ${tag}));
+            sortedTags.forEach(tag => core.info(`  Tag: ${tag}`));
+
+            // Scansione delle prime 5 immagini
+            const top5Images = sortedTags.slice(0, 5);
+
+            const trivyScan = async (image) => {
+                return new Promise((resolve, reject) => {
+                    exec(`trivy image --severity CRITICAL,HIGH --format json --output trivy-report-${image}.json ${image}`, (error, stdout, stderr) => {
+                        if (error) {
+                            reject(`Errore durante la scansione di Trivy per l'immagine ${image}: ${stderr}`);
+                        } else {
+                            resolve(`Trivy report per ${image} salvato.`);
+                        }
+                    });
+                });
+            };
+
+            for (const image of top5Images) {
+                core.info(`Inizio scansione per immagine: ${image}`);
+                try {
+                    await trivyScan(image);
+                    core.info(`Scansione completata per immagine: ${image}`);
+                } catch (err) {
+                    core.setFailed(`Errore nella scansione di ${image}: ${err}`);
+                }
+            }
         } else {
             core.info("Non sono stati trovati tag Alpine più recenti.");
         }
 
     } catch (parseErr) {
-        core.setFailed(Error parsing the report: ${parseErr.message});
+        core.setFailed(`Error parsing the report: ${parseErr.message}`);
         process.exit(1);
     }
 });
