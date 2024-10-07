@@ -1,7 +1,7 @@
 const fs = require("fs");
 const core = require("@actions/core");
 const axios = require("axios");
-const semver = require("semver");
+const semver = require('semver');
 
 const reportPath = core.getInput("trivy-report");
 
@@ -25,8 +25,10 @@ fs.readFile(reportPath, "utf8", async (err, data) => {
             process.exit(1);
         }
 
+        // Log dell'immagine base
         core.info(`Base Image: ${artifactName}`);
 
+        // Funzione per estrarre informazioni rilevanti da ogni vulnerabilità
         const extractVulnInfo = (vulnerabilities) => {
             return vulnerabilities.map(vuln => {
                 return {
@@ -40,10 +42,11 @@ fs.readFile(reportPath, "utf8", async (err, data) => {
             });
         };
 
+        // Iterare attraverso i risultati del report
         report.Results.forEach(result => {
             core.info(`Target: ${result.Target}`);
             const relevantVulns = extractVulnInfo(result.Vulnerabilities || []);
-
+            
             relevantVulns.forEach(vulnInfo => {
                 core.info(`Package: ${vulnInfo.PkgName}`);
                 core.info(`Vulnerability ID: ${vulnInfo.VulnerabilityID}`);
@@ -54,9 +57,10 @@ fs.readFile(reportPath, "utf8", async (err, data) => {
             });
         });
 
+        // Usare ArtifactName per determinare il namespace e il repository
         const parts = artifactName.split(":")[0].split("/");
 
-        let namespace = "library";
+        let namespace = "library";  // Impostazione predefinita per immagini Docker ufficiali
         let repository = parts[0];
 
         if (parts.length === 2) {
@@ -67,6 +71,7 @@ fs.readFile(reportPath, "utf8", async (err, data) => {
         core.info(`Namespace: ${namespace}`);
         core.info(`Repository: ${repository}`);
 
+        // Funzione per ottenere tutti i tag che contengono "alpine" e attraversare le pagine
         const getAlpineTags = async (namespace, repository, currentTag) => {
             let url = `https://hub.docker.com/v2/repositories/${namespace}/${repository}/tags/?name=alpine&page_size=100`;
             let tags = [];
@@ -81,16 +86,20 @@ fs.readFile(reportPath, "utf8", async (err, data) => {
                         process.exit(1);
                     }
 
+                    // Estrazione della versione da "node:18.20.2-alpine" -> "18.20.2"
                     const currentVersion = currentTag.split(":")[1].split("-alpine")[0];
 
+                    // Filtra e aggiungi solo i tag che contengono "alpine" e che sono versioni valide semver maggiori della corrente
                     pageTags.forEach(tag => {
-                        const tagVersion = tag.name.split("-alpine")[0];
-
+                        const tagVersion = tag.name.split("-alpine")[0]; // Estrarre la parte di versione
+                        
+                        // Controllare che il tag rappresenti una versione semver valida
                         if (tag.name.includes("alpine") && semver.valid(tagVersion) && semver.gt(tagVersion, currentVersion)) {
                             tags.push(tag.name);
                         }
                     });
 
+                    // Se c'è una pagina successiva, aggiornare l'URL per ottenere la pagina successiva
                     url = response.data.next;
                 } catch (apiErr) {
                     core.setFailed(`Error fetching tags from Docker Hub: ${apiErr.message}`);
@@ -101,26 +110,35 @@ fs.readFile(reportPath, "utf8", async (err, data) => {
             return tags;
         };
 
-        const currentTag = artifactName;
+        // Esempio di chiamata alla funzione
+        const currentTag = artifactName;  // L'immagine base
         const alpineTags = await getAlpineTags(namespace, repository, currentTag);
 
+        // Funzione di ordinamento avanzata
+        const sortTags = (tags) => {
+            return tags.sort((a, b) => {
+                // Estrai versione principale e versione Alpine
+                const [versionA, alpineA] = a.split("-alpine");
+                const [versionB, alpineB] = b.split("-alpine");
+
+                // Ordina per versione semver
+                const semverCompare = semver.compare(versionA, versionB);
+                if (semverCompare !== 0) return semverCompare;
+
+                // Se le versioni semver sono uguali, ordina per versione Alpine (se presente)
+                const alpineVersionA = alpineA ? alpineA.replace('.', '') : ''; // Rimuovi il punto per confrontare come numero
+                const alpineVersionB = alpineB ? alpineB.replace('.', '') : '';
+
+                return alpineVersionA.localeCompare(alpineVersionB, undefined, { numeric: true });
+            });
+        };
+
+        // Stampa dei tag ottenuti e ordinamento
         if (alpineTags.length > 0) {
+            const sortedTags = sortTags(alpineTags);
+
             core.info("Alpine Tags ordinati:");
-            const sortedTags = alpineTags.sort(semver.compare);
-            sortedTags.slice(0, 5).forEach(tag => core.info(`Tag: ${tag}`));
-
-            for (const tag of sortedTags.slice(0, 5)) {
-                try {
-                    const response = await axios.post("https://your-trivy-api-endpoint/scan", {
-                        image: tag
-                    });
-
-                    fs.writeFileSync(`${tag}-trivy-report.json`, JSON.stringify(response.data, null, 2));
-                    core.info(`Successfully scanned: ${tag}`);
-                } catch (err) {
-                    core.setFailed(`Error scanning ${tag}: ${err.message}`);
-                }
-            }
+            sortedTags.forEach(tag => core.info(`  Tag: ${tag}`));
         } else {
             core.info("Non sono stati trovati tag Alpine più recenti.");
         }
