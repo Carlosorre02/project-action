@@ -4,6 +4,9 @@ const axios = require("axios");
 const semver = require('semver');
 const { exec } = require('child_process');
 
+// Funzione per aggiungere un ritardo
+const sleep = (ms) => new Promise(resolve => setTimeout(resolve, ms));
+
 const reportPath = core.getInput("trivy-report");
 
 if (!reportPath) {
@@ -185,6 +188,9 @@ fs.readFile(reportPath, "utf8", async (err, data) => {
 
                     // Parse and display the Trivy report
                     parseTrivyReport(image);
+
+                    // Aggiungi un ritardo di 10 secondi tra le scansioni
+                    await sleep(10000); // 10000 millisecondi = 10 secondi
                 } catch (err) {
                     core.setFailed(`Errore nella scansione di ${image}: ${err}`);
                 }
