@@ -184,7 +184,6 @@ fs.readFile(reportPath, "utf8", async (err, data) => {
                 core.info(`Inizio scansione per immagine: ${image}`);
                 try {
                     await trivyScan(image);
-                    core.info(`Scansione completata per immagine: ${image}`);
 
                     // Parse and display the Trivy report
                     parseTrivyReport(image);
