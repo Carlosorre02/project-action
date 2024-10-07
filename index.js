@@ -141,12 +141,13 @@ fs.readFile(reportPath, "utf8", async (err, data) => {
             const top5Images = sortedTags.slice(0, 5);
 
             const trivyScan = async (image) => {
+                const fullImageName = `library/node:${image}`; // Aggiungi il prefisso corretto
                 return new Promise((resolve, reject) => {
-                    exec(`trivy image --severity CRITICAL,HIGH --format json --output trivy-report-${image}.json ${image}`, (error, stdout, stderr) => {
+                    exec(`trivy image --severity CRITICAL,HIGH --format json --output trivy-report-${image}.json ${fullImageName}`, (error, stdout, stderr) => {
                         if (error) {
-                            reject(`Errore durante la scansione di Trivy per l'immagine ${image}: ${stderr}`);
+                            reject(`Errore durante la scansione di Trivy per l'immagine ${fullImageName}: ${stderr}`);
                         } else {
-                            resolve(`Trivy report per ${image} salvato.`);
+                            resolve(`Trivy report per ${fullImageName} salvato.`);
                         }
                     });
                 });
