@@ -162,14 +162,18 @@ fs.readFile(reportPath, "utf8", async (err, data) => {
                     core.info(`Target: ${result.Target}`);
                     const vulnerabilities = result.Vulnerabilities || [];
 
-                    vulnerabilities.forEach(vuln => {
-                        core.info(`Package: ${vuln.PkgName}`);
-                        core.info(`Vulnerability ID: ${vuln.VulnerabilityID}`);
-                        core.info(`Severity: ${vuln.Severity}`);
-                        core.info(`Installed Version: ${vuln.InstalledVersion}`);
-                        core.info(`Fixed Version: ${vuln.FixedVersion || "No fix available"}`);
-                        core.info("---");
-                    });
+                    if (vulnerabilities.length > 0) {
+                        vulnerabilities.forEach(vuln => {
+                            core.info(`Package: ${vuln.PkgName}`);
+                            core.info(`Vulnerability ID: ${vuln.VulnerabilityID}`);
+                            core.info(`Severity: ${vuln.Severity}`);
+                            core.info(`Installed Version: ${vuln.InstalledVersion}`);
+                            core.info(`Fixed Version: ${vuln.FixedVersion || "No fix available"}`);
+                            core.info("---");
+                        });
+                    } else {
+                        core.info(`Nessuna vulnerabilità trovata per ${result.Target}`);
+                    }
                 });
             };
 
