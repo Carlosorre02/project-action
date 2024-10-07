@@ -143,7 +143,7 @@ fs.readFile(reportPath, "utf8", async (err, data) => {
             const trivyScan = async (image) => {
                 const fullImageName = `library/node:${image}`; // Aggiungi il prefisso corretto
                 return new Promise((resolve, reject) => {
-                    exec(`trivy image --severity CRITICAL,HIGH --format json --output trivy-report-${image}.json ${fullImageName}`, (error, stdout, stderr) => {
+                    exec(`trivy image --format json --output trivy-report-${image}.json ${fullImageName}`, (error, stdout, stderr) => {
                         if (error) {
                             reject(`Errore durante la scansione di Trivy per l'immagine ${fullImageName}: ${stderr}`);
                         } else {
