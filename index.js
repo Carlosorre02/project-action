@@ -131,9 +131,10 @@ fs.readFile(reportPath, "utf8", async (err, data) => {
 
             for (const tag of topFiveTags) {
                 try {
-                    core.info(`Eseguo la scansione Trivy per l'immagine: ${tag}`);
-                    execSync(`trivy image --severity CRITICAL,HIGH ${tag} --format json --output trivy-report-${tag}.json`);
-                    core.info(`Scansione completata per ${tag}`);
+                    const fullTag = `node:${tag}`;  // Aggiungi il prefisso node: per tutte le immagini
+                    core.info(`Eseguo la scansione Trivy per l'immagine: ${fullTag}`);
+                    execSync(`trivy image --severity CRITICAL,HIGH ${fullTag} --format json --output trivy-report-${tag}.json`);
+                    core.info(`Scansione completata per ${fullTag}`);
                 } catch (error) {
                     core.setFailed(`Errore durante la scansione di ${tag}: ${error.message}`);
                 }
