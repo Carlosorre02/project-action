@@ -4,6 +4,9 @@ const axios = require("axios");
 const semver = require('semver');
 const { execSync } = require('child_process');
 
+// Funzione di delay per evitare rate limits
+const delay = ms => new Promise(resolve => setTimeout(resolve, ms));
+
 const reportPath = core.getInput("trivy-report");
 
 if (!reportPath) {
@@ -28,6 +31,7 @@ fs.readFile(reportPath, "utf8", async (err, data) => {
 
         core.info(`Base Image: ${artifactName}`);
 
+        // Funzione per estrarre informazioni sulle vulnerabilità
         const extractVulnInfo = (vulnerabilities) => {
             return vulnerabilities.map(vuln => {
                 return {
@@ -41,6 +45,7 @@ fs.readFile(reportPath, "utf8", async (err, data) => {
             });
         };
 
+        // Iterare attraverso i risultati del report
         report.Results.forEach(result => {
             core.info(`Target: ${result.Target}`);
             const relevantVulns = extractVulnInfo(result.Vulnerabilities || []);
@@ -57,7 +62,7 @@ fs.readFile(reportPath, "utf8", async (err, data) => {
 
         const parts = artifactName.split(":")[0].split("/");
 
-        let namespace = "library";
+        let namespace = "library";  // Default per immagini ufficiali Docker
         let repository = parts[0];
 
         if (parts.length === 2) {
@@ -68,6 +73,7 @@ fs.readFile(reportPath, "utf8", async (err, data) => {
         core.info(`Namespace: ${namespace}`);
         core.info(`Repository: ${repository}`);
 
+        // Funzione per ottenere i tag che contengono "alpine"
         const getAlpineTags = async (namespace, repository, currentTag) => {
             let url = `https://hub.docker.com/v2/repositories/${namespace}/${repository}/tags/?name=alpine&page_size=100`;
             let tags = [];
@@ -126,15 +132,18 @@ fs.readFile(reportPath, "utf8", async (err, data) => {
             core.info("Alpine Tags ordinati:");
             sortedTags.forEach(tag => core.info(`  Tag: ${tag}`));
 
-            // Esegui la scansione Trivy solo sui primi 5 tag
-            const topFiveTags = sortedTags.slice(0, 5); // Prendi i primi 5 tag
+            // Esegui la scansione Trivy sui primi 5 tag
+            const topFiveTags = sortedTags.slice(0, 5);
 
             for (const tag of topFiveTags) {
                 try {
-                    const fullTag = `node:${tag}`;  // Aggiungi il prefisso node: per tutte le immagini
+                    const fullTag = `node:${tag}`;
                     core.info(`Eseguo la scansione Trivy per l'immagine: ${fullTag}`);
                     execSync(`trivy image --severity CRITICAL,HIGH ${fullTag} --format json --output trivy-report-${tag}.json`);
                     core.info(`Scansione completata per ${fullTag}`);
+
+                    // Aggiungi un ritardo di 5 secondi prima della prossima scansione
+                    await delay(5000);
                 } catch (error) {
                     core.setFailed(`Errore durante la scansione di ${tag}: ${error.message}`);
                 }
