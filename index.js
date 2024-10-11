@@ -1,6 +1,12 @@
 const fs = require("fs");
 const core = require("@actions/core");
 const axios = require("axios");
+const semver = require('semver');
+const { exec } = require('child_process');
+const artifact = require('@actions/artifact');
+
+// Funzione per aggiungere un ritardo
+const sleep = (ms) => new Promise(resolve => setTimeout(resolve, ms));
 
 const reportPath = core.getInput("trivy-report");
 
@@ -45,7 +51,7 @@ fs.readFile(reportPath, "utf8", async (err, data) => {
         report.Results.forEach(result => {
             core.info(`Target: ${result.Target}`);
             const relevantVulns = extractVulnInfo(result.Vulnerabilities || []);
-            
+
             relevantVulns.forEach(vulnInfo => {
                 core.info(`Package: ${vulnInfo.PkgName}`);
                 core.info(`Vulnerability ID: ${vulnInfo.VulnerabilityID}`);
@@ -71,7 +77,7 @@ fs.readFile(reportPath, "utf8", async (err, data) => {
         core.info(`Repository: ${repository}`);
 
         // Funzione per ottenere tutti i tag che contengono "alpine" e attraversare le pagine
-        const getAlpineTags = async (namespace, repository) => {
+        const getAlpineTags = async (namespace, repository, currentTag) => {
             let url = `https://hub.docker.com/v2/repositories/${namespace}/${repository}/tags/?name=alpine&page_size=100`;
             let tags = [];
 
@@ -85,9 +91,15 @@ fs.readFile(reportPath, "utf8", async (err, data) => {
                         process.exit(1);
                     }
 
-                    // Filtra e aggiungi solo i tag che contengono "alpine"
+                    // Estrazione della versione da "node:18.20.2-alpine" -> "18.20.2"
+                    const currentVersion = currentTag.split(":")[1].split("-alpine")[0];
+
+                    // Filtra e aggiungi solo i tag che contengono "alpine" e che sono versioni valide semver maggiori della corrente
                     pageTags.forEach(tag => {
-                        if (tag.name.includes("alpine")) {
+                        const tagVersion = tag.name.split("-alpine")[0]; // Estrarre la parte di versione
+
+                        // Controllare che il tag rappresenti una versione semver valida
+                        if (tag.name.includes("alpine") && semver.valid(tagVersion) && semver.gt(tagVersion, currentVersion)) {
                             tags.push(tag.name);
                         }
                     });
@@ -103,14 +115,102 @@ fs.readFile(reportPath, "utf8", async (err, data) => {
             return tags;
         };
 
-        // Ottenere i tag "alpine" e stamparli
-        const alpineTags = await getAlpineTags(namespace, repository);
+        // Esempio di chiamata alla funzione
+        const currentTag = artifactName;  // L'immagine base
+        const alpineTags = await getAlpineTags(namespace, repository, currentTag);
 
+        // Funzione di ordinamento avanzata
+        const sortTags = (tags) => {
+            return tags.sort((a, b) => {
+                const [versionA, alpineA] = a.split("-alpine");
+                const [versionB, alpineB] = b.split("-alpine");
+
+                const semverCompare = semver.compare(versionA, versionB);
+                if (semverCompare !== 0) return semverCompare;
+
+                const alpineVersionA = alpineA ? alpineA.replace('.', '') : '';
+                const alpineVersionB = alpineB ? alpineB.replace('.', '') : '';
+
+                return alpineVersionA.localeCompare(alpineVersionB, undefined, { numeric: true });
+            });
+        };
+
+        // Stampa dei tag ottenuti e ordinamento
         if (alpineTags.length > 0) {
-            core.info("Alpine Tags:");
-            alpineTags.forEach(tag => core.info(`  Tag: ${tag}`));
+            const sortedTags = sortTags(alpineTags);
+            core.info("Alpine Tags ordinati:");
+            sortedTags.forEach(tag => core.info(`  Tag: ${tag}`));
+
+            // Scansione delle prime 5 immagini
+            const top5Images = sortedTags.slice(0, 5);
+
+            const trivyScan = async (image) => {
+                const fullImageName = `library/node:${image}`; // Aggiungi il prefisso corretto
+                return new Promise((resolve, reject) => {
+                    exec(`trivy image --format json --output trivy-report-${image}.json ${fullImageName}`, (error, stdout, stderr) => {
+                        if (error) {
+                            reject(`Errore durante la scansione di Trivy per l'immagine ${fullImageName}: ${stderr}`);
+                        } else {
+                            resolve(`Trivy report per ${fullImageName} salvato.`);
+                        }
+                    });
+                });
+            };
+
+            const parseTrivyReport = (image) => {
+                const reportPath = `trivy-report-${image}.json`;
+                const reportData = fs.readFileSync(reportPath, "utf8");
+                const report = JSON.parse(reportData);
+
+                report.Results.forEach(result => {
+                    core.info(`Target: ${result.Target}`);
+                    const vulnerabilities = result.Vulnerabilities || [];
+
+                    if (vulnerabilities.length > 0) {
+                        vulnerabilities.forEach(vuln => {
+                            core.info(`Package: ${vuln.PkgName}`);
+                            core.info(`Vulnerability ID: ${vuln.VulnerabilityID}`);
+                            core.info(`Severity: ${vuln.Severity}`);
+                            core.info(`Installed Version: ${vuln.InstalledVersion}`);
+                            core.info(`Fixed Version: ${vuln.FixedVersion || "No fix available"}`);
+                            core.info("---");
+                        });
+                    } else {
+                        core.info(`Nessuna vulnerabilità trovata per ${result.Target}`);
+                    }
+                });
+            };
+
+            const uploadTrivyReport = async (image) => {
+                const artifactClient = artifact.create();
+                const reportPath = `trivy-report-${image}.json`;
+                const files = [reportPath];
+                const artifactName = `trivy-report-${image}`;
+                await artifactClient.uploadArtifact(artifactName, files, ".", {
+                    continueOnError: false
+                });
+                core.info(`Report JSON disponibile per il download: ${artifactName}`);
+            };
+
+            for (const image of top5Images) {
+                core.info(`Inizio scansione per immagine: ${image}`);
+                try {
+                    await trivyScan(image);
+
+                    // Parse and display the Trivy report
+                    parseTrivyReport(image);
+
+                    // Carica il report Trivy come artefatto
+                    await uploadTrivyReport(image);
+
+                    // Aggiungi un ritardo di 10 secondi tra le scansioni
+                    await sleep(10000); // 10000 millisecondi = 10 secondi
+                } catch (err) {
+                    core.setFailed(`Errore nella scansione di ${image}: ${err}`);
+                }
+            }
         } else {
-            core.info("No Alpine tags found.");
+            core.info("Non sono stati trovati tag Alpine più recenti.");
         }
 
     } catch (parseErr) {
