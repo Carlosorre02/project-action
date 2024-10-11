@@ -3,7 +3,6 @@ const core = require("@actions/core");
 const axios = require("axios");
 const semver = require('semver');
 const { exec } = require('child_process');
-const artifact = require('@actions/artifact');
 
 // Funzione per aggiungere un ritardo
 const sleep = (ms) => new Promise(resolve => setTimeout(resolve, ms));
@@ -181,17 +180,6 @@ fs.readFile(reportPath, "utf8", async (err, data) => {
                 });
             };
 
-            const uploadTrivyReport = async (image) => {
-                const artifactClient = artifact.create();
-                const reportPath = `trivy-report-${image}.json`;
-                const files = [reportPath];
-                const artifactName = `trivy-report-${image}`;
-                await artifactClient.uploadArtifact(artifactName, files, ".", {
-                    continueOnError: false
-                });
-                core.info(`Report JSON disponibile per il download: ${artifactName}`);
-            };
-
             for (const image of top5Images) {
                 core.info(`Inizio scansione per immagine: ${image}`);
                 try {
@@ -199,9 +187,6 @@ fs.readFile(reportPath, "utf8", async (err, data) => {
 
                     // Parse and display the Trivy report
                     parseTrivyReport(image);
-
-                    // Carica il report Trivy come artefatto
-                    await uploadTrivyReport(image);
 
                     // Aggiungi un ritardo di 10 secondi tra le scansioni
                     await sleep(10000); // 10000 millisecondi = 10 secondi
