@@ -5,5 +5,9 @@ inputs:
     description: 'Path to the Trivy JSON report'
     required: true
 runs:
-  using: 'node12'
+  using: 'node16'  # Aggiorna a una versione più recente di Node.js
   main: 'index.js'
+  pre:
+    steps:
+      - name: Install dependencies
+        run: npm install  # Installa le dipendenze definite nel package.json
