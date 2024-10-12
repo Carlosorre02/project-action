@@ -203,6 +203,13 @@ fs.readFile(reportPath, "utf8", async (err, data) => {
 
                     // Aggiungi un ritardo di 10 secondi tra le scansioni
                     await sleep(10000); // 10000 millisecondi = 10 secondi
+
+                    // Carica il report come artefatto
+                    core.info(`Caricamento del report per l'immagine ${image}`);
+                    exec(`echo "::set-output name=artifact_name::trivy-report-${image}.json"`);
+                    exec(`echo "::set-output name=artifact_path::trivy-report-${image}.json"`);
+                    exec(`actions/upload-artifact@v4 --name trivy-report-${image}.json --path trivy-report-${image}.json`);
+
                 } catch (err) {
                     core.setFailed(`Errore nella scansione di ${image}: ${err}`);
                 }
