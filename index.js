@@ -48,7 +48,11 @@ fs.readFile(reportPath, "utf8", async (err, data) => {
 
         // Iterare attraverso i risultati del report
         report.Results.forEach(result => {
-            core.info(`Target: ${result.Target}`);
+            // Ignoriamo il target "Node.js" se non ha vulnerabilità
+            if (result.Target && result.Target !== "Node.js") {
+                core.info(`Target: ${result.Target}`);
+            }
+
             const relevantVulns = extractVulnInfo(result.Vulnerabilities || []);
 
             relevantVulns.forEach(vulnInfo => {
@@ -60,7 +64,7 @@ fs.readFile(reportPath, "utf8", async (err, data) => {
                 core.info("---");
             });
 
-            // Se non ci sono vulnerabilità, evita di stampare per target generici
+            // Se non ci sono vulnerabilità, evitiamo di stampare per target generici
             if (relevantVulns.length === 0 && result.Target && result.Target !== "Node.js") {
                 core.info(`Nessuna vulnerabilità trovata per ${result.Target}`);
             }
@@ -167,7 +171,11 @@ fs.readFile(reportPath, "utf8", async (err, data) => {
                 const report = JSON.parse(reportData);
 
                 report.Results.forEach(result => {
-                    core.info(`Target: ${result.Target}`);
+                    // Ignora il target "Node.js" se non ci sono vulnerabilità
+                    if (result.Target && result.Target !== "Node.js") {
+                        core.info(`Target: ${result.Target}`);
+                    }
+
                     const vulnerabilities = result.Vulnerabilities || [];
 
                     if (vulnerabilities.length > 0) {
