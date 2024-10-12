@@ -3,6 +3,7 @@ const core = require("@actions/core");
 const axios = require("axios");
 const semver = require('semver');
 const { exec } = require('child_process');
+const { mv } = require('shelljs'); // Aggiungi shelljs per spostare i file
 
 // Funzione per aggiungere un ritardo
 const sleep = (ms) => new Promise(resolve => setTimeout(resolve, ms));
@@ -157,8 +158,10 @@ fs.readFile(reportPath, "utf8", async (err, data) => {
 
             const uploadReport = (image) => {
                 const artifactPath = `trivy-report-${image}.json`;
+                const destPath = `./reports/trivy-report-${image}.json`; // Sposta nella cartella reports
+                mv(artifactPath, destPath);
                 core.info(`Upload del report per ${artifactPath}`);
-                core.setOutput('report-path', artifactPath);
+                core.setOutput('report-path', destPath);
             };
 
             const parseTrivyReport = (image) => {
@@ -187,6 +190,7 @@ fs.readFile(reportPath, "utf8", async (err, data) => {
                     }
                 });
 
+                // Carica il report come artefatto
                 uploadReport(image);
             };
 
