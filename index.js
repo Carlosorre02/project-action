@@ -150,7 +150,11 @@ fs.readFile(reportPath, "utf8", async (err, data) => {
                         if (error) {
                             reject(`Errore durante la scansione di Trivy per l'immagine ${fullImageName}: ${stderr}`);
                         } else {
-                            resolve(`Trivy report per ${fullImageName} salvato.`);
+                            if (fs.existsSync(`trivy-report-${image}.json`)) {
+                                resolve(`Trivy report per ${fullImageName} salvato.`);
+                            } else {
+                                reject(`Il report per ${fullImageName} non esiste.`);
+                            }
                         }
                     });
                 });
@@ -181,7 +185,7 @@ fs.readFile(reportPath, "utf8", async (err, data) => {
             };
 
             for (const image of top5Images) {
-                core.info(`Inizio scansione per immagine: ${image}`);
+                core.info(`Inizio scansione per immagine: ${image}`); // Log inizio scansione
                 try {
                     await trivyScan(image);
 
@@ -193,6 +197,7 @@ fs.readFile(reportPath, "utf8", async (err, data) => {
                 } catch (err) {
                     core.setFailed(`Errore nella scansione di ${image}: ${err}`);
                 }
+                core.info(`Fine scansione per immagine: ${image}`); // Log fine scansione
             }
         } else {
             core.info("Non sono stati trovati tag Alpine più recenti.");
