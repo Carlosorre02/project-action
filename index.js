@@ -198,7 +198,7 @@ fs.readFile(reportPath, "utf8", async (err, data) => {
                     parseTrivyReport(image);
 
                     // Aggiungi un ritardo di 10 secondi tra le scansioni
-                    await sleep(10000); // 10000 millisecondi = 10 secondi
+                    await sleep(2000); // 10000 millisecondi = 10 secondi
                 } catch (err) {
                     core.setFailed(`Errore nella scansione di ${image}: ${err}`);
                 }
