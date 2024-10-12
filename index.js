@@ -46,25 +46,23 @@ fs.readFile(reportPath, "utf8", async (err, data) => {
             });
         };
 
-        // Iterare attraverso i risultati del report in modo asincrono
-        for (const result of report.Results) {
+        // Iterare attraverso i risultati del report
+        report.Results.forEach(result => {
             core.info(`Target: ${result.Target}`);
             const relevantVulns = extractVulnInfo(result.Vulnerabilities || []);
 
-            for (const vulnInfo of relevantVulns) {
-                core.info(`Package: ${vulnInfo.PkgName}`);
-                core.info(`Vulnerability ID: ${vulnInfo.VulnerabilityID}`);
-                core.info(`Severity: ${vulnInfo.Severity}`);
-                core.info(`Installed Version: ${vulnInfo.InstalledVersion}`);
-                core.info(`Fixed Version: ${vulnInfo.FixedVersion}`);
-                core.info("---");
+            // Se ci sono vulnerabilità, mostra i dettagli
+            if (relevantVulns.length > 0) {
+                relevantVulns.forEach(vulnInfo => {
+                    core.info(`Package: ${vulnInfo.PkgName}`);
+                    core.info(`Vulnerability ID: ${vulnInfo.VulnerabilityID}`);
+                    core.info(`Severity: ${vulnInfo.Severity}`);
+                    core.info(`Installed Version: ${vulnInfo.InstalledVersion}`);
+                    core.info(`Fixed Version: ${vulnInfo.FixedVersion}`);
+                    core.info("---");
+                });
             }
-
-            // Mostra il log solo quando tutte le vulnerabilità sono state elaborate
-            if (result.Target === 'Node.js' && relevantVulns.length === 0) {
-                core.info('Nessuna vulnerabilità trovata per Node.js');
-            }
-        }
+        });
 
         // Usare ArtifactName per determinare il namespace e il repository
         const parts = artifactName.split(":")[0].split("/");
@@ -171,11 +169,9 @@ fs.readFile(reportPath, "utf8", async (err, data) => {
                 const report = JSON.parse(reportData);
 
                 report.Results.forEach(result => {
-                    core.info(`Target: ${result.Target}`);
-                    const vulnerabilities = result.Vulnerabilities || [];
-
-                    if (vulnerabilities.length > 0) {
-                        vulnerabilities.forEach(vuln => {
+                    if (result.Vulnerabilities && result.Vulnerabilities.length > 0) {
+                        core.info(`Target: ${result.Target}`);
+                        result.Vulnerabilities.forEach(vuln => {
                             core.info(`Package: ${vuln.PkgName}`);
                             core.info(`Vulnerability ID: ${vuln.VulnerabilityID}`);
                             core.info(`Severity: ${vuln.Severity}`);
@@ -183,8 +179,6 @@ fs.readFile(reportPath, "utf8", async (err, data) => {
                             core.info(`Fixed Version: ${vuln.FixedVersion || "No fix available"}`);
                             core.info("---");
                         });
-                    } else {
-                        core.info(`Nessuna vulnerabilità trovata per ${result.Target}`);
                     }
                 });
             };
@@ -195,7 +189,7 @@ fs.readFile(reportPath, "utf8", async (err, data) => {
                     await trivyScan(image);
 
                     // Parse and display the Trivy report
-                    await parseTrivyReport(image);
+                    parseTrivyReport(image);
 
                     // Aggiungi un ritardo di 10 secondi tra le scansioni
                     await sleep(10000); // 10000 millisecondi = 10 secondi
