@@ -51,7 +51,6 @@ fs.readFile(reportPath, "utf8", async (err, data) => {
             core.info(`Target: ${result.Target}`);
             const relevantVulns = extractVulnInfo(result.Vulnerabilities || []);
 
-            // Se ci sono vulnerabilità, mostra i dettagli
             if (relevantVulns.length > 0) {
                 relevantVulns.forEach(vulnInfo => {
                     core.info(`Package: ${vulnInfo.PkgName}`);
@@ -61,6 +60,9 @@ fs.readFile(reportPath, "utf8", async (err, data) => {
                     core.info(`Fixed Version: ${vulnInfo.FixedVersion}`);
                     core.info("---");
                 });
+            } else {
+                // Se non ci sono vulnerabilità, visualizza il messaggio
+                core.info(`Nessuna vulnerabilità trovata per ${result.Target}`);
             }
         });
 
@@ -169,9 +171,11 @@ fs.readFile(reportPath, "utf8", async (err, data) => {
                 const report = JSON.parse(reportData);
 
                 report.Results.forEach(result => {
-                    if (result.Vulnerabilities && result.Vulnerabilities.length > 0) {
-                        core.info(`Target: ${result.Target}`);
-                        result.Vulnerabilities.forEach(vuln => {
+                    core.info(`Target: ${result.Target}`);
+                    const vulnerabilities = result.Vulnerabilities || [];
+
+                    if (vulnerabilities.length > 0) {
+                        vulnerabilities.forEach(vuln => {
                             core.info(`Package: ${vuln.PkgName}`);
                             core.info(`Vulnerability ID: ${vuln.VulnerabilityID}`);
                             core.info(`Severity: ${vuln.Severity}`);
@@ -179,6 +183,8 @@ fs.readFile(reportPath, "utf8", async (err, data) => {
                             core.info(`Fixed Version: ${vuln.FixedVersion || "No fix available"}`);
                             core.info("---");
                         });
+                    } else {
+                        core.info(`Nessuna vulnerabilità trovata per ${result.Target}`);
                     }
                 });
             };
