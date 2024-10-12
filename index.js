@@ -128,4 +128,78 @@ fs.readFile(reportPath, "utf8", async (err, data) => {
                 const alpineVersionA = alpineA ? alpineA.replace('.', '') : '';
                 const alpineVersionB = alpineB ? alpineB.replace('.', '') : '';
 
-                return alpineVersionA.localeCompare
+                return alpineVersionA.localeCompare(alpineVersionB, undefined, { numeric: true });
+            });
+        };
+
+        if (alpineTags.length > 0) {
+            const sortedTags = sortTags(alpineTags);
+            core.info("Alpine Tags ordinati:");
+            sortedTags.forEach(tag => core.info(`  Tag: ${tag}`));
+
+            const top5Images = sortedTags.slice(0, 5);
+
+            const trivyScan = async (image) => {
+                const fullImageName = `library/node:${image}`;
+                return new Promise((resolve, reject) => {
+                    exec(`trivy image --format json --output trivy-report-${image}.json --severity MEDIUM,HIGH,CRITICAL ${fullImageName}`, (error, stdout, stderr) => {
+                        if (error) {
+                            reject(`Errore durante la scansione di Trivy per l'immagine ${fullImageName}: ${stderr}`);
+                        } else {
+                            resolve(`Trivy report per ${fullImageName} salvato.`);
+                        }
+                    });
+                });
+            };
+
+            const parseTrivyReport = (image) => {
+                const reportPath = `trivy-report-${image}.json`;
+                const reportData = fs.readFileSync(reportPath, "utf8");
+                const report = JSON.parse(reportData);
+
+                report.Results.forEach(result => {
+                    if (result.Target && result.Target !== "Node.js") {
+                        core.info(`Target: ${result.Target}`);
+                    }
+
+                    const vulnerabilities = result.Vulnerabilities || [];
+
+                    if (vulnerabilities.length > 0) {
+                        vulnerabilities.forEach(vuln => {
+                            core.info(`Package: ${vuln.PkgName}`);
+                            core.info(`Vulnerability ID: ${vuln.VulnerabilityID}`);
+                            core.info(`Severity: ${vuln.Severity}`);
+                            core.info(`Installed Version: ${vuln.InstalledVersion}`);
+                            core.info(`Fixed Version: ${vuln.FixedVersion || "No fix available"}`);
+                            core.info("---");
+                        });
+                    } else if (result.Target && result.Target !== "Node.js") {
+                        core.info(`Nessuna vulnerabilità trovata per ${result.Target}`);
+                    }
+                });
+            };
+
+            for (const image of top5Images) {
+                core.info(`Inizio scansione per immagine: ${image}`);
+                try {
+                    await trivyScan(image);
+                    parseTrivyReport(image);
+
+                    // Aggiungi un link per il download del report
+                    core.info(`Puoi scaricare il report di Trivy per l'immagine ${image} qui: https://github.com/tuo-repository/actions/runs/${process.env.GITHUB_RUN_ID}/artifacts`);
+
+                    await sleep(10000);
+
+                } catch (err) {
+                    core.setFailed(`Errore nella scansione di ${image}: ${err}`);
+                }
+            }
+        } else {
+            core.info("Non sono stati trovati tag Alpine più recenti.");
+        }
+
+    } catch (parseErr) {
+        core.setFailed(`Error parsing the report: ${parseErr.message}`);
+        process.exit(1);
+    }
+});
