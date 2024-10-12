@@ -1,4 +1,4 @@
-const fs = require("fs");
+const fs = require("fs"); 
 const core = require("@actions/core");
 const axios = require("axios");
 const semver = require('semver');
@@ -48,7 +48,6 @@ fs.readFile(reportPath, "utf8", async (err, data) => {
 
         // Iterare attraverso i risultati del report
         report.Results.forEach(result => {
-            // Ignoriamo il target "Node.js" se non ha vulnerabilità
             if (result.Target && result.Target !== "Node.js") {
                 core.info(`Target: ${result.Target}`);
             }
@@ -64,7 +63,6 @@ fs.readFile(reportPath, "utf8", async (err, data) => {
                 core.info("---");
             });
 
-            // Se non ci sono vulnerabilità, evitiamo di stampare per target generici
             if (relevantVulns.length === 0 && result.Target && result.Target !== "Node.js") {
                 core.info(`Nessuna vulnerabilità trovata per ${result.Target}`);
             }
@@ -73,7 +71,7 @@ fs.readFile(reportPath, "utf8", async (err, data) => {
         // Usare ArtifactName per determinare il namespace e il repository
         const parts = artifactName.split(":")[0].split("/");
 
-        let namespace = "library";  // Impostazione predefinita per immagini Docker ufficiali
+        let namespace = "library";  
         let repository = parts[0];
 
         if (parts.length === 2) {
@@ -99,20 +97,16 @@ fs.readFile(reportPath, "utf8", async (err, data) => {
                         process.exit(1);
                     }
 
-                    // Estrazione della versione da "node:18.20.2-alpine" -> "18.20.2"
                     const currentVersion = currentTag.split(":")[1].split("-alpine")[0];
 
-                    // Filtra e aggiungi solo i tag che contengono "alpine" e che sono versioni valide semver maggiori della corrente
                     pageTags.forEach(tag => {
-                        const tagVersion = tag.name.split("-alpine")[0]; // Estrarre la parte di versione
+                        const tagVersion = tag.name.split("-alpine")[0];
 
-                        // Controllare che il tag rappresenti una versione semver valida
                         if (tag.name.includes("alpine") && semver.valid(tagVersion) && semver.gt(tagVersion, currentVersion)) {
                             tags.push(tag.name);
                         }
                     });
 
-                    // Se c'è una pagina successiva, aggiornare l'URL per ottenere la pagina successiva
                     url = response.data.next;
                 } catch (apiErr) {
                     core.setFailed(`Error fetching tags from Docker Hub: ${apiErr.message}`);
@@ -123,11 +117,9 @@ fs.readFile(reportPath, "utf8", async (err, data) => {
             return tags;
         };
 
-        // Esempio di chiamata alla funzione
-        const currentTag = artifactName;  // L'immagine base
+        const currentTag = artifactName;  
         const alpineTags = await getAlpineTags(namespace, repository, currentTag);
 
-        // Funzione di ordinamento avanzata
         const sortTags = (tags) => {
             return tags.sort((a, b) => {
                 const [versionA, alpineA] = a.split("-alpine");
@@ -143,17 +135,15 @@ fs.readFile(reportPath, "utf8", async (err, data) => {
             });
         };
 
-        // Stampa dei tag ottenuti e ordinamento
         if (alpineTags.length > 0) {
             const sortedTags = sortTags(alpineTags);
             core.info("Alpine Tags ordinati:");
             sortedTags.forEach(tag => core.info(`  Tag: ${tag}`));
 
-            // Scansione delle prime 5 immagini
             const top5Images = sortedTags.slice(0, 5);
 
             const trivyScan = async (image) => {
-                const fullImageName = `library/node:${image}`; // Aggiungi il prefisso corretto
+                const fullImageName = `library/node:${image}`;
                 return new Promise((resolve, reject) => {
                     exec(`trivy image --format json --output trivy-report-${image}.json --severity MEDIUM,HIGH,CRITICAL ${fullImageName}`, (error, stdout, stderr) => {
                         if (error) {
@@ -165,13 +155,18 @@ fs.readFile(reportPath, "utf8", async (err, data) => {
                 });
             };
 
+            const uploadReport = (image) => {
+                const artifactPath = `trivy-report-${image}.json`;
+                core.info(`Upload del report per ${artifactPath}`);
+                core.setOutput('report-path', artifactPath);
+            };
+
             const parseTrivyReport = (image) => {
                 const reportPath = `trivy-report-${image}.json`;
                 const reportData = fs.readFileSync(reportPath, "utf8");
                 const report = JSON.parse(reportData);
 
                 report.Results.forEach(result => {
-                    // Ignora il target "Node.js" se non ci sono vulnerabilità
                     if (result.Target && result.Target !== "Node.js") {
                         core.info(`Target: ${result.Target}`);
                     }
@@ -191,18 +186,16 @@ fs.readFile(reportPath, "utf8", async (err, data) => {
                         core.info(`Nessuna vulnerabilità trovata per ${result.Target}`);
                     }
                 });
+
+                uploadReport(image);
             };
 
             for (const image of top5Images) {
                 core.info(`Inizio scansione per immagine: ${image}`);
                 try {
                     await trivyScan(image);
-
-                    // Parse and display the Trivy report
                     parseTrivyReport(image);
-
-                    // Aggiungi un ritardo di 10 secondi tra le scansioni
-                    await sleep(10000); // 10000 millisecondi = 10 secondi
+                    await sleep(10000);
                 } catch (err) {
                     core.setFailed(`Errore nella scansione di ${image}: ${err}`);
                 }
