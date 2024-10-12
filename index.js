@@ -46,25 +46,25 @@ fs.readFile(reportPath, "utf8", async (err, data) => {
             });
         };
 
-        // Iterare attraverso i risultati del report
-        report.Results.forEach(result => {
+        // Iterare attraverso i risultati del report in modo asincrono
+        for (const result of report.Results) {
             core.info(`Target: ${result.Target}`);
             const relevantVulns = extractVulnInfo(result.Vulnerabilities || []);
 
-            relevantVulns.forEach(vulnInfo => {
+            for (const vulnInfo of relevantVulns) {
                 core.info(`Package: ${vulnInfo.PkgName}`);
                 core.info(`Vulnerability ID: ${vulnInfo.VulnerabilityID}`);
                 core.info(`Severity: ${vulnInfo.Severity}`);
                 core.info(`Installed Version: ${vulnInfo.InstalledVersion}`);
                 core.info(`Fixed Version: ${vulnInfo.FixedVersion}`);
                 core.info("---");
-            });
+            }
 
-            // Messaggio per Node.js vulnerabilità
+            // Mostra il log solo quando tutte le vulnerabilità sono state elaborate
             if (result.Target === 'Node.js' && relevantVulns.length === 0) {
                 core.info('Nessuna vulnerabilità trovata per Node.js');
             }
-        });
+        }
 
         // Usare ArtifactName per determinare il namespace e il repository
         const parts = artifactName.split(":")[0].split("/");
@@ -195,7 +195,7 @@ fs.readFile(reportPath, "utf8", async (err, data) => {
                     await trivyScan(image);
 
                     // Parse and display the Trivy report
-                    parseTrivyReport(image);
+                    await parseTrivyReport(image);
 
                     // Aggiungi un ritardo di 10 secondi tra le scansioni
                     await sleep(10000); // 10000 millisecondi = 10 secondi
