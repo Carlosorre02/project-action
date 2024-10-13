@@ -1,12 +1,12 @@
 const fs = require("fs");
 const core = require("@actions/core");
 const axios = require("axios");
-const semver = require('semver');
-const { exec } = require('child_process');
-const artifactClient = require('@actions/artifact');
+const semver = require("semver");
+const { exec } = require("child_process");
+const artifact = require("@actions/artifact");
 
 // Funzione per aggiungere un ritardo
-const sleep = (ms) => new Promise(resolve => setTimeout(resolve, ms));
+const sleep = (ms) => new Promise((resolve) => setTimeout(resolve, ms));
 
 const reportPath = core.getInput("trivy-report");
 
@@ -33,25 +33,30 @@ fs.readFile(reportPath, "utf8", async (err, data) => {
         // Log dell'immagine base
         core.info(`Base Image: ${artifactName}`);
 
+        // Funzione per estrarre informazioni rilevanti da ogni vulnerabilità
         const extractVulnInfo = (vulnerabilities) => {
-            return vulnerabilities.map(vuln => ({
-                Target: vuln.Target,
-                PkgName: vuln.PkgName,
-                VulnerabilityID: vuln.VulnerabilityID,
-                Severity: vuln.Severity,
-                InstalledVersion: vuln.InstalledVersion,
-                FixedVersion: vuln.FixedVersion || "No fix available"
-            }));
+            return vulnerabilities.map((vuln) => {
+                return {
+                    Target: vuln.Target,
+                    PkgName: vuln.PkgName,
+                    VulnerabilityID: vuln.VulnerabilityID,
+                    Severity: vuln.Severity,
+                    InstalledVersion: vuln.InstalledVersion,
+                    FixedVersion: vuln.FixedVersion || "No fix available",
+                };
+            });
         };
 
-        report.Results.forEach(result => {
+        // Iterare attraverso i risultati del report
+        report.Results.forEach((result) => {
+            // Ignoriamo il target "Node.js" se non ha vulnerabilità
             if (result.Target && result.Target !== "Node.js") {
                 core.info(`Target: ${result.Target}`);
             }
 
             const relevantVulns = extractVulnInfo(result.Vulnerabilities || []);
 
-            relevantVulns.forEach(vulnInfo => {
+            relevantVulns.forEach((vulnInfo) => {
                 core.info(`Package: ${vulnInfo.PkgName}`);
                 core.info(`Vulnerability ID: ${vulnInfo.VulnerabilityID}`);
                 core.info(`Severity: ${vulnInfo.Severity}`);
@@ -66,7 +71,6 @@ fs.readFile(reportPath, "utf8", async (err, data) => {
         });
 
         const parts = artifactName.split(":")[0].split("/");
-
         let namespace = "library";
         let repository = parts[0];
 
@@ -94,7 +98,7 @@ fs.readFile(reportPath, "utf8", async (err, data) => {
 
                     const currentVersion = currentTag.split(":")[1].split("-alpine")[0];
 
-                    pageTags.forEach(tag => {
+                    pageTags.forEach((tag) => {
                         const tagVersion = tag.name.split("-alpine")[0];
 
                         if (tag.name.includes("alpine") && semver.valid(tagVersion) && semver.gt(tagVersion, currentVersion)) {
@@ -127,22 +131,39 @@ fs.readFile(reportPath, "utf8", async (err, data) => {
         if (alpineTags.length > 0) {
             const sortedTags = sortTags(alpineTags);
             core.info("Alpine Tags ordinati:");
-            sortedTags.forEach(tag => core.info(`  Tag: ${tag}`));
+            sortedTags.forEach((tag) => core.info(`  Tag: ${tag}`));
 
             const top5Images = sortedTags.slice(0, 5);
 
             const trivyScan = async (image, reportFileName) => {
                 const fullImageName = `library/node:${image}`;
                 return new Promise((resolve, reject) => {
-                    exec(`trivy image --format json --output ${reportFileName} --severity MEDIUM,HIGH,CRITICAL ${fullImageName}`, 
-                    (error, stdout, stderr) => {
-                        if (error) {
-                            reject(`Errore durante la scansione di Trivy per l'immagine ${fullImageName}: ${stderr}`);
-                        } else {
-                            resolve(`Trivy report per ${fullImageName} salvato.`);
+                    exec(
+                        `trivy image --format json --output ${reportFileName} --severity MEDIUM,HIGH,CRITICAL ${fullImageName}`,
+                        (error, stdout, stderr) => {
+                            if (error) {
+                                reject(`Errore durante la scansione di Trivy per l'immagine ${fullImageName}: ${stderr}`);
+                            } else {
+                                resolve(`Trivy report per ${fullImageName} salvato.`);
+                            }
                         }
-                    });
+                    );
                 });
+            };
+
+            const uploadArtifactForImage = async (reportFileName) => {
+                try {
+                    const artifactClient = artifact.create();
+                    await artifactClient.uploadArtifact(reportFileName, [reportFileName], '.');
+
+                    const repository = process.env.GITHUB_REPOSITORY;
+                    const runId = process.env.GITHUB_RUN_ID;
+                    const reportLink = `https://github.com/${repository}/actions/runs/${runId}/artifacts`;
+
+                    core.info(`Upload Trivy JSON Report for ${reportFileName}: ${reportLink}`);
+                } catch (err) {
+                    core.setFailed(`Errore nel caricamento del report per l'immagine ${reportFileName}: ${err}`);
+                }
             };
 
             const parseTrivyReport = (image) => {
@@ -150,7 +171,7 @@ fs.readFile(reportPath, "utf8", async (err, data) => {
                 const reportData = fs.readFileSync(reportPath, "utf8");
                 const report = JSON.parse(reportData);
 
-                report.Results.forEach(result => {
+                report.Results.forEach((result) => {
                     if (result.Target && result.Target !== "Node.js") {
                         core.info(`Target: ${result.Target}`);
                     }
@@ -158,7 +179,7 @@ fs.readFile(reportPath, "utf8", async (err, data) => {
                     const vulnerabilities = result.Vulnerabilities || [];
 
                     if (vulnerabilities.length > 0) {
-                        vulnerabilities.forEach(vuln => {
+                        vulnerabilities.forEach((vuln) => {
                             core.info(`Package: ${vuln.PkgName}`);
                             core.info(`Vulnerability ID: ${vuln.VulnerabilityID}`);
                             core.info(`Severity: ${vuln.Severity}`);
@@ -172,27 +193,13 @@ fs.readFile(reportPath, "utf8", async (err, data) => {
                 });
             };
 
-            const uploadArtifactForImage = async (reportFileName) => {
-                const artifactName = `trivy-report-${reportFileName}`;
-                
-                const uploadResult = await artifactClient.create().uploadArtifact(
-                    artifactName,
-                    [reportFileName],
-                    process.cwd()
-                );
-
-                core.info(`Report caricato per immagine ${reportFileName}: ${uploadResult.artifactItems}`);
-            };
-
             for (const image of top5Images) {
                 core.info(`Inizio scansione per immagine: ${image}`);
                 try {
                     const reportFileName = `trivy-report-${image}.json`;
 
                     await trivyScan(image, reportFileName);
-
                     await uploadArtifactForImage(reportFileName);
-
                     parseTrivyReport(image);
 
                     await sleep(10000);
@@ -203,7 +210,6 @@ fs.readFile(reportPath, "utf8", async (err, data) => {
         } else {
             core.info("Non sono stati trovati tag Alpine più recenti.");
         }
-
     } catch (parseErr) {
         core.setFailed(`Error parsing the report: ${parseErr.message}`);
         process.exit(1);
