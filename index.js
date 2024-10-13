@@ -153,17 +153,14 @@ fs.readFile(reportPath, "utf8", async (err, data) => {
             const uploadArtifactForImage = async (reportFileName) => {
                 try {
                     const artifactClient = artifact.create();
-                    const uploadResponse = await artifactClient.uploadArtifact(reportFileName, [reportFileName], '.');
+                    await artifactClient.uploadArtifact(reportFileName, [reportFileName], '.');
 
-                    // Estrai l'ID dell'artefatto dalla risposta
-                    const artifactId = uploadResponse.artifactId;
                     const repository = process.env.GITHUB_REPOSITORY;
                     const runId = process.env.GITHUB_RUN_ID;
                     
-                    // Genera il link con l'ID specifico dell'artefatto
-                    const reportLink = `https://github.com/${repository}/actions/runs/${runId}/artifacts/${artifactId}`;
+                    // Crea il link usando runId e repository
+                    const reportLink = `https://github.com/${repository}/actions/runs/${runId}/artifacts`;
                     
-                    // Mostra solo il messaggio con il link al report
                     core.info(`Upload Trivy JSON Report for ${reportFileName}: ${reportLink}`);
                 } catch (err) {
                     core.setFailed(`Errore nel caricamento del report per l'immagine ${reportFileName}: ${err}`);
