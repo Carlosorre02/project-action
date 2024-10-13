@@ -1,13 +1,9 @@
-name: 'Parse Trivy Report'
+name: 'Parse Trivy Report' 
 description: 'Parses a Trivy JSON report and prints relevant fields'
 inputs:
   trivy-report:
     description: 'Path to the Trivy JSON report'
     required: true
 runs:
-  using: 'node16'  # Aggiorna a una versione più recente di Node.js
+  using: 'node12'
   main: 'index.js'
-  pre:
-    steps:
-      - name: Install dependencies
-        run: npm install  # Installa le dipendenze definite nel package.json
