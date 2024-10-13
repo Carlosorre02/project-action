@@ -10,6 +10,6 @@
     "@actions/core": "^1.10.0",
     "axios": "^1.7.7",
     "semver": "^7.6.3",
-    "@actions/artifact": "^1.0.0"  // Aggiunta di @actions/artifact
+    "@actions/artifact": "^1.0.0" 
   }
 }
