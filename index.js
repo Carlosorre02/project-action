@@ -49,6 +49,7 @@ fs.readFile(reportPath, "utf8", async (err, data) => {
 
         // Iterare attraverso i risultati del report
         report.Results.forEach((result) => {
+            // Ignoriamo il target "Node.js" se non ha vulnerabilità
             if (result.Target && result.Target !== "Node.js") {
                 core.info(`Target: ${result.Target}`);
             }
@@ -157,10 +158,8 @@ fs.readFile(reportPath, "utf8", async (err, data) => {
 
                     const repository = process.env.GITHUB_REPOSITORY;
                     const runId = process.env.GITHUB_RUN_ID;
-                    
-                    // Crea il link usando runId e repository
                     const reportLink = `https://github.com/${repository}/actions/runs/${runId}/artifacts`;
-                    
+
                     core.info(`Upload Trivy JSON Report for ${reportFileName}: ${reportLink}`);
                 } catch (err) {
                     core.setFailed(`Errore nel caricamento del report per l'immagine ${reportFileName}: ${err}`);
