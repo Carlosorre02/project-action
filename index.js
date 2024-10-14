@@ -32,6 +32,9 @@ const extractVulnInfoBySeverity = (vulnerabilities) => {
         if (vuln.VulnerabilityID) {
             vulnBySeverity[vuln.Severity.toUpperCase()].push({
                 VulnerabilityID: vuln.VulnerabilityID,
+                PkgName: vuln.PkgName,
+                InstalledVersion: vuln.InstalledVersion,
+                FixedVersion: vuln.FixedVersion || "No fix available",
             });
         }
     });
@@ -74,20 +77,24 @@ fs.readFile(reportPath, "utf8", async (err, data) => {
             if (result.Target && result.Target !== "Node.js") {
                 core.info(`Target: ${result.Target}`);
 
-                const processedVulnerabilities = processVulnerabilities(result, result.Target);
-
-                // Log dettagliato delle vulnerabilità nel workflow
-                Object.keys(processedVulnerabilities.vulnerabilities).forEach((severity) => {
-                    processedVulnerabilities.vulnerabilities[severity].forEach((vuln) => {
-                        core.info(`Vulnerability ID: ${vuln.VulnerabilityID} (Severity: ${severity})`);
-                    });
+                const relevantVulns = result.Vulnerabilities || [];
+                
+                relevantVulns.forEach((vuln) => {
+                    core.info(`Package: ${vuln.PkgName}`);
+                    core.info(`Vulnerability ID: ${vuln.VulnerabilityID}`);
+                    core.info(`Severity: ${vuln.Severity}`);
+                    core.info(`Installed Version: ${vuln.InstalledVersion}`);
+                    core.info(`Fixed Version: ${vuln.FixedVersion || "No fix available"}`);
+                    core.info("---");
                 });
 
-                summaryReport.imagesAnalyzed.push(processedVulnerabilities);
-            }
+                if (relevantVulns.length === 0) {
+                    core.info(`Nessuna vulnerabilità trovata per ${result.Target}`);
+                }
 
-            if (!result.Vulnerabilities && result.Target && result.Target !== "Node.js") {
-                core.info(`Nessuna vulnerabilità trovata per ${result.Target}`);
+                // Aggiungi le informazioni di ogni target al report riassuntivo
+                const processedVulnerabilities = processVulnerabilities(result, result.Target);
+                summaryReport.imagesAnalyzed.push(processedVulnerabilities);
             }
         });
 
@@ -196,15 +203,23 @@ fs.readFile(reportPath, "utf8", async (err, data) => {
                     if (result.Target && result.Target !== "Node.js") {
                         core.info(`Target: ${result.Target}`);
 
-                        const processedVulnerabilities = processVulnerabilities(result, result.Target);
-
-                        // Log dettagliato delle vulnerabilità nel workflow
-                        Object.keys(processedVulnerabilities.vulnerabilities).forEach((severity) => {
-                            processedVulnerabilities.vulnerabilities[severity].forEach((vuln) => {
-                                core.info(`Vulnerability ID: ${vuln.VulnerabilityID} (Severity: ${severity})`);
-                            });
+                        const relevantVulns = result.Vulnerabilities || [];
+                        
+                        relevantVulns.forEach((vuln) => {
+                            core.info(`Package: ${vuln.PkgName}`);
+                            core.info(`Vulnerability ID: ${vuln.VulnerabilityID}`);
+                            core.info(`Severity: ${vuln.Severity}`);
+                            core.info(`Installed Version: ${vuln.InstalledVersion}`);
+                            core.info(`Fixed Version: ${vuln.FixedVersion || "No fix available"}`);
+                            core.info("---");
                         });
 
+                        if (relevantVulns.length === 0) {
+                            core.info(`Nessuna vulnerabilità trovata per ${result.Target}`);
+                        }
+
+                        // Aggiungi le informazioni di ogni target al report riassuntivo
+                        const processedVulnerabilities = processVulnerabilities(result, result.Target);
                         summaryReport.imagesAnalyzed.push(processedVulnerabilities);
                     }
                 });
