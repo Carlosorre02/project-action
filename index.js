@@ -18,7 +18,7 @@ if (!reportPath) {
 // Aggiungi la struttura del report riassuntivo
 let summaryReport = {
     baseImage: "",
-    severity: "LOW, MEDIUM, HIGH, CRITICAL", // La severity utilizzata, inclusa LOW
+    severity: "LOW, MEDIUM, HIGH, CRITICAL", // La severity utilizzata
     iterationCount: 0,
     versionSelectionLogic: "La priorità è stata data prima alle patch version, poi alle minor e infine alle major version.",
     imagesAnalyzed: [], // Dettagli sulle immagini analizzate
@@ -75,6 +75,14 @@ fs.readFile(reportPath, "utf8", async (err, data) => {
                 core.info(`Target: ${result.Target}`);
 
                 const processedVulnerabilities = processVulnerabilities(result, result.Target);
+
+                // Log dettagliato delle vulnerabilità nel workflow
+                Object.keys(processedVulnerabilities.vulnerabilities).forEach((severity) => {
+                    processedVulnerabilities.vulnerabilities[severity].forEach((vuln) => {
+                        core.info(`Vulnerability ID: ${vuln.VulnerabilityID} (Severity: ${severity})`);
+                    });
+                });
+
                 summaryReport.imagesAnalyzed.push(processedVulnerabilities);
             }
 
@@ -189,6 +197,14 @@ fs.readFile(reportPath, "utf8", async (err, data) => {
                         core.info(`Target: ${result.Target}`);
 
                         const processedVulnerabilities = processVulnerabilities(result, result.Target);
+
+                        // Log dettagliato delle vulnerabilità nel workflow
+                        Object.keys(processedVulnerabilities.vulnerabilities).forEach((severity) => {
+                            processedVulnerabilities.vulnerabilities[severity].forEach((vuln) => {
+                                core.info(`Vulnerability ID: ${vuln.VulnerabilityID} (Severity: ${severity})`);
+                            });
+                        });
+
                         summaryReport.imagesAnalyzed.push(processedVulnerabilities);
                     }
                 });
