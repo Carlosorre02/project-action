@@ -171,11 +171,7 @@ fs.readFile(reportPath, "utf8", async (err, data) => {
                     const artifactClient = artifact.create();
                     await artifactClient.uploadArtifact(reportFileName, [reportFileName], '.');
 
-                    const repository = process.env.GITHUB_REPOSITORY;
-                    const runId = process.env.GITHUB_RUN_ID;
-                    const reportLink = `https://github.com/${repository}/actions/runs/${runId}/artifacts`;
-
-                    core.info(`Upload Trivy JSON Report for ${reportFileName}: ${reportLink}`);
+                    // Rimosso il log dettagliato sull'upload
                 } catch (err) {
                     core.setFailed(`Errore nel caricamento del report per l'immagine ${reportFileName}: ${err}`);
                 }
@@ -230,7 +226,7 @@ fs.readFile(reportPath, "utf8", async (err, data) => {
             fs.writeFileSync("summary-report.json", JSON.stringify(summaryReport, null, 2));
             core.info("Summary report generated successfully!");
 
-            // Carica il report come artifact
+            // Carica il report come artifact senza log dettagliati
             const artifactClient = artifact.create();
             await artifactClient.uploadArtifact("summary-report.json", ["summary-report.json"], ".");
 
