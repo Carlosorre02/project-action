@@ -24,32 +24,27 @@ let summaryReport = {
     imagesAnalyzed: [], // Dettagli sulle immagini analizzate
 };
 
-// Funzione per estrarre le informazioni delle vulnerabilità separate per gravità
-const extractVulnInfoBySeverity = (vulnerabilities) => {
-    const vulnBySeverity = { LOW: [], MEDIUM: [], HIGH: [], CRITICAL: [] };
+// Funzione per estrarre solo i CVE delle vulnerabilità separate per gravità
+const extractCveBySeverity = (vulnerabilities) => {
+    const cveBySeverity = { LOW: [], MEDIUM: [], HIGH: [], CRITICAL: [] };
 
     vulnerabilities.forEach((vuln) => {
         if (vuln.VulnerabilityID) {
-            vulnBySeverity[vuln.Severity.toUpperCase()].push({
-                VulnerabilityID: vuln.VulnerabilityID,
-                PkgName: vuln.PkgName,
-                InstalledVersion: vuln.InstalledVersion,
-                FixedVersion: vuln.FixedVersion || "No fix available",
-            });
+            cveBySeverity[vuln.Severity.toUpperCase()].push(vuln.VulnerabilityID);
         }
     });
 
-    return vulnBySeverity;
+    return cveBySeverity;
 };
 
-// Funzione per iterare attraverso i risultati e separare le vulnerabilità per gravità
-const processVulnerabilities = (results, target) => {
+// Funzione per iterare attraverso i risultati e separare solo i CVE per gravità
+const processCve = (results, target) => {
     const vulnerabilities = results.Vulnerabilities || [];
-    const vulnBySeverity = extractVulnInfoBySeverity(vulnerabilities);
+    const cveBySeverity = extractCveBySeverity(vulnerabilities);
 
     return {
         target,
-        vulnerabilities: vulnBySeverity,
+        vulnerabilities: cveBySeverity,
     };
 };
 
@@ -80,6 +75,7 @@ fs.readFile(reportPath, "utf8", async (err, data) => {
                 const relevantVulns = result.Vulnerabilities || [];
                 
                 relevantVulns.forEach((vuln) => {
+                    // Manteniamo l'output dettagliato nel workflow
                     core.info(`Package: ${vuln.PkgName}`);
                     core.info(`Vulnerability ID: ${vuln.VulnerabilityID}`);
                     core.info(`Severity: ${vuln.Severity}`);
@@ -92,9 +88,9 @@ fs.readFile(reportPath, "utf8", async (err, data) => {
                     core.info(`Nessuna vulnerabilità trovata per ${result.Target}`);
                 }
 
-                // Aggiungi le informazioni di ogni target al report riassuntivo
-                const processedVulnerabilities = processVulnerabilities(result, result.Target);
-                summaryReport.imagesAnalyzed.push(processedVulnerabilities);
+                // Aggiungi le informazioni dei CVE al report riassuntivo
+                const processedCve = processCve(result, result.Target);
+                summaryReport.imagesAnalyzed.push(processedCve);
             }
         });
 
@@ -218,9 +214,9 @@ fs.readFile(reportPath, "utf8", async (err, data) => {
                             core.info(`Nessuna vulnerabilità trovata per ${result.Target}`);
                         }
 
-                        // Aggiungi le informazioni di ogni target al report riassuntivo
-                        const processedVulnerabilities = processVulnerabilities(result, result.Target);
-                        summaryReport.imagesAnalyzed.push(processedVulnerabilities);
+                        // Aggiungi solo i CVE al report riassuntivo
+                        const processedCve = processCve(result, result.Target);
+                        summaryReport.imagesAnalyzed.push(processedCve);
                     }
                 });
             };
