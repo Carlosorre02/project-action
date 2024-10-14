@@ -18,9 +18,36 @@ if (!reportPath) {
 // Aggiungi la struttura del report riassuntivo
 let summaryReport = {
     baseImage: "",
-    severity: "MEDIUM, HIGH, CRITICAL", // La severity utilizzata
+    severity: "LOW, MEDIUM, HIGH, CRITICAL", // La severity utilizzata, inclusa LOW
     iterationCount: 0,
+    versionSelectionLogic: "La priorità è stata data prima alle patch version, poi alle minor e infine alle major version.",
     imagesAnalyzed: [], // Dettagli sulle immagini analizzate
+};
+
+// Funzione per estrarre le informazioni delle vulnerabilità separate per gravità
+const extractVulnInfoBySeverity = (vulnerabilities) => {
+    const vulnBySeverity = { LOW: [], MEDIUM: [], HIGH: [], CRITICAL: [] };
+
+    vulnerabilities.forEach((vuln) => {
+        if (vuln.VulnerabilityID) {
+            vulnBySeverity[vuln.Severity.toUpperCase()].push({
+                VulnerabilityID: vuln.VulnerabilityID,
+            });
+        }
+    });
+
+    return vulnBySeverity;
+};
+
+// Funzione per iterare attraverso i risultati e separare le vulnerabilità per gravità
+const processVulnerabilities = (results, target) => {
+    const vulnerabilities = results.Vulnerabilities || [];
+    const vulnBySeverity = extractVulnInfoBySeverity(vulnerabilities);
+
+    return {
+        target,
+        vulnerabilities: vulnBySeverity,
+    };
 };
 
 fs.readFile(reportPath, "utf8", async (err, data) => {
@@ -42,46 +69,18 @@ fs.readFile(reportPath, "utf8", async (err, data) => {
         summaryReport.baseImage = artifactName;
         core.info(`Base Image: ${artifactName}`);
 
-        // Funzione per estrarre informazioni rilevanti da ogni vulnerabilità
-        const extractVulnInfo = (vulnerabilities) => {
-            return vulnerabilities.map((vuln) => {
-                return {
-                    Target: vuln.Target,
-                    PkgName: vuln.PkgName,
-                    VulnerabilityID: vuln.VulnerabilityID,
-                    Severity: vuln.Severity,
-                    InstalledVersion: vuln.InstalledVersion,
-                    FixedVersion: vuln.FixedVersion || "No fix available",
-                };
-            });
-        };
-
-        // Iterare attraverso i risultati del report
+        // Iterare attraverso i risultati del report per l'immagine base
         report.Results.forEach((result) => {
             if (result.Target && result.Target !== "Node.js") {
                 core.info(`Target: ${result.Target}`);
+
+                const processedVulnerabilities = processVulnerabilities(result, result.Target);
+                summaryReport.imagesAnalyzed.push(processedVulnerabilities);
             }
 
-            const relevantVulns = extractVulnInfo(result.Vulnerabilities || []);
-
-            relevantVulns.forEach((vulnInfo) => {
-                core.info(`Package: ${vulnInfo.PkgName}`);
-                core.info(`Vulnerability ID: ${vulnInfo.VulnerabilityID}`);
-                core.info(`Severity: ${vulnInfo.Severity}`);
-                core.info(`Installed Version: ${vulnInfo.InstalledVersion}`);
-                core.info(`Fixed Version: ${vulnInfo.FixedVersion}`);
-                core.info("---");
-            });
-
-            if (relevantVulns.length === 0 && result.Target && result.Target !== "Node.js") {
+            if (!result.Vulnerabilities && result.Target && result.Target !== "Node.js") {
                 core.info(`Nessuna vulnerabilità trovata per ${result.Target}`);
             }
-
-            // Aggiungi le informazioni di ogni target al report riassuntivo
-            summaryReport.imagesAnalyzed.push({
-                target: result.Target,
-                vulnerabilities: relevantVulns,
-            });
         });
 
         const parts = artifactName.split(":")[0].split("/");
@@ -188,34 +187,10 @@ fs.readFile(reportPath, "utf8", async (err, data) => {
                 report.Results.forEach((result) => {
                     if (result.Target && result.Target !== "Node.js") {
                         core.info(`Target: ${result.Target}`);
+
+                        const processedVulnerabilities = processVulnerabilities(result, result.Target);
+                        summaryReport.imagesAnalyzed.push(processedVulnerabilities);
                     }
-
-                    const vulnerabilities = result.Vulnerabilities || [];
-
-                    if (vulnerabilities.length > 0) {
-                        vulnerabilities.forEach((vuln) => {
-                            core.info(`Package: ${vuln.PkgName}`);
-                            core.info(`Vulnerability ID: ${vuln.VulnerabilityID}`);
-                            core.info(`Severity: ${vuln.Severity}`);
-                            core.info(`Installed Version: ${vuln.InstalledVersion}`);
-                            core.info(`Fixed Version: ${vuln.FixedVersion || "No fix available"}`);
-                            core.info("---");
-                        });
-                    } else if (result.Target && result.Target !== "Node.js") {
-                        core.info(`Nessuna vulnerabilità trovata per ${result.Target}`);
-                    }
-
-                    // Aggiungi le informazioni di ogni target al report riassuntivo
-                    summaryReport.imagesAnalyzed.push({
-                        target: result.Target,
-                        vulnerabilities: vulnerabilities.map((vuln) => ({
-                            PkgName: vuln.PkgName,
-                            VulnerabilityID: vuln.VulnerabilityID,
-                            Severity: vuln.Severity,
-                            InstalledVersion: vuln.InstalledVersion,
-                            FixedVersion: vuln.FixedVersion || "No fix available",
-                        })),
-                    });
                 });
             };
 
