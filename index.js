@@ -1,4 +1,4 @@
-const fs = require("fs"); 
+const fs = require("fs");
 const core = require("@actions/core");
 const axios = require("axios");
 const semver = require("semver");
@@ -40,7 +40,6 @@ fs.readFile(reportPath, "utf8", async (err, data) => {
 
         // Imposta l'immagine base nel report riassuntivo
         summaryReport.baseImage = artifactName;
-        
         core.info(`Base Image: ${artifactName}`);
 
         // Funzione per estrarre informazioni rilevanti da ogni vulnerabilità
@@ -205,6 +204,18 @@ fs.readFile(reportPath, "utf8", async (err, data) => {
                     } else if (result.Target && result.Target !== "Node.js") {
                         core.info(`Nessuna vulnerabilità trovata per ${result.Target}`);
                     }
+
+                    // Aggiungi le informazioni di ogni target al report riassuntivo
+                    summaryReport.imagesAnalyzed.push({
+                        target: result.Target,
+                        vulnerabilities: vulnerabilities.map((vuln) => ({
+                            PkgName: vuln.PkgName,
+                            VulnerabilityID: vuln.VulnerabilityID,
+                            Severity: vuln.Severity,
+                            InstalledVersion: vuln.InstalledVersion,
+                            FixedVersion: vuln.FixedVersion || "No fix available",
+                        })),
+                    });
                 });
             };
 
