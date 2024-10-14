@@ -15,6 +15,14 @@ if (!reportPath) {
     process.exit(1);
 }
 
+// Aggiungi la struttura del report riassuntivo
+let summaryReport = {
+    baseImage: "",
+    severity: "MEDIUM, HIGH, CRITICAL", // La severity utilizzata
+    iterationCount: 0,
+    imagesAnalyzed: [], // Dettagli sulle immagini analizzate
+};
+
 fs.readFile(reportPath, "utf8", async (err, data) => {
     if (err) {
         core.setFailed(`Error reading the report: ${err.message}`);
@@ -30,7 +38,9 @@ fs.readFile(reportPath, "utf8", async (err, data) => {
             process.exit(1);
         }
 
-        // Log dell'immagine base
+        // Imposta l'immagine base nel report riassuntivo
+        summaryReport.baseImage = artifactName;
+        
         core.info(`Base Image: ${artifactName}`);
 
         // Funzione per estrarre informazioni rilevanti da ogni vulnerabilità
@@ -49,7 +59,6 @@ fs.readFile(reportPath, "utf8", async (err, data) => {
 
         // Iterare attraverso i risultati del report
         report.Results.forEach((result) => {
-            // Ignoriamo il target "Node.js" se non ha vulnerabilità
             if (result.Target && result.Target !== "Node.js") {
                 core.info(`Target: ${result.Target}`);
             }
@@ -68,6 +77,12 @@ fs.readFile(reportPath, "utf8", async (err, data) => {
             if (relevantVulns.length === 0 && result.Target && result.Target !== "Node.js") {
                 core.info(`Nessuna vulnerabilità trovata per ${result.Target}`);
             }
+
+            // Aggiungi le informazioni di ogni target al report riassuntivo
+            summaryReport.imagesAnalyzed.push({
+                target: result.Target,
+                vulnerabilities: relevantVulns,
+            });
         });
 
         const parts = artifactName.split(":")[0].split("/");
@@ -207,6 +222,18 @@ fs.readFile(reportPath, "utf8", async (err, data) => {
                     core.setFailed(`Errore nella scansione di ${image}: ${err}`);
                 }
             }
+
+            // Aggiungi conteggio delle iterazioni al report
+            summaryReport.iterationCount = top5Images.length;
+
+            // Salva il report finale
+            fs.writeFileSync("summary-report.json", JSON.stringify(summaryReport, null, 2));
+            core.info("Summary report generated successfully!");
+
+            // Carica il report come artifact
+            const artifactClient = artifact.create();
+            await artifactClient.uploadArtifact("summary-report.json", ["summary-report.json"], ".");
+
         } else {
             core.info("Non sono stati trovati tag Alpine più recenti.");
         }
