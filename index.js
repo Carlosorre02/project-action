@@ -193,4 +193,52 @@ fs.readFile(reportPath, "utf8", async (err, data) => {
 
                     const vulnerabilities = result.Vulnerabilities || [];
 
-                    if (vulner
+                    if (vulnerabilities.length > 0) {
+                        vulnerabilities.forEach((vuln) => {
+                            core.info(`Package: ${vuln.PkgName}`);
+                            core.info(`Vulnerability ID: ${vuln.VulnerabilityID}`);
+                            core.info(`Severity: ${vuln.Severity}`);
+                            core.info(`Installed Version: ${vuln.InstalledVersion}`);
+                            core.info(`Fixed Version: ${vuln.FixedVersion || "No fix available"}`);
+                            core.info("---");
+                        });
+                    } else if (result.Target && result.Target !== "Node.js") {
+                        core.info(`Nessuna vulnerabilità trovata per ${result.Target}`);
+                    }
+                });
+            };
+
+            for (const image of top5Images) {
+                core.info(`Inizio scansione per immagine: ${image}`);
+                try {
+                    const reportFileName = `trivy-report-${image}.json`;
+
+                    await trivyScan(image, reportFileName);
+                    await uploadArtifactForImage(reportFileName);
+                    parseTrivyReport(image);
+
+                    await sleep(10000);
+                } catch (err) {
+                    core.setFailed(`Errore nella scansione di ${image}: ${err}`);
+                }
+            }
+
+            // Aggiungi conteggio delle iterazioni al report
+            summaryReport.iterationCount = top5Images.length;
+
+            // Salva il report finale
+            fs.writeFileSync("summary-report.json", JSON.stringify(summaryReport, null, 2));
+            core.info("Summary report generated successfully!");
+
+            // Carica il report come artifact
+            const artifactClient = artifact.create();
+            await artifactClient.uploadArtifact("summary-report.json", ["summary-report.json"], ".");
+
+        } else {
+            core.info("Non sono stati trovati tag Alpine più recenti.");
+        }
+    } catch (parseErr) {
+        core.setFailed(`Error parsing the report: ${parseErr.message}`);
+        process.exit(1);
+    }
+});
