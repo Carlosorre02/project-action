@@ -219,6 +219,18 @@ fs.readFile(reportPath, "utf8", async (err, data) => {
 
             // Salva il report di riepilogo come JSON
             fs.writeFileSync("summary-report.json", JSON.stringify(summaryReport, null, 2));
+
+            // Funzione di caricamento del report di riepilogo
+            const uploadSummaryReport = async () => {
+                try {
+                    const artifactClient = artifact.create();
+                    await artifactClient.uploadArtifact("summary-report.json", ["summary-report.json"], '.');
+                    core.info("Report riassuntivo caricato con successo.");
+                } catch (err) {
+                    core.setFailed(`Errore nel caricamento del report riassuntivo: ${err}`);
+                }
+            };
+
             await uploadSummaryReport();
 
         } else {
