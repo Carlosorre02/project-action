@@ -137,20 +137,47 @@ fs.readFile(reportPath, "utf8", async (err, data) => {
                 }
             }
 
-            return tags;
+            return sortTags(tags);
+        };
+
+        // Funzione di ordinamento dei tag con priorità corretta
+        const sortTags = (tags) => {
+            return tags.sort((a, b) => {
+                const regex = /(\d+\.\d+\.\d+)-alpine(?:([\d\.]+))?/;
+
+                const matchA = a.match(regex);
+                const matchB = b.match(regex);
+
+                if (matchA && matchB) {
+                    const versionA = matchA[1];
+                    const variantA = matchA[2] || "";  // Se non c'è variante, trattiamola come prioritaria
+                    const versionB = matchB[1];
+                    const variantB = matchB[2] || "";
+
+                    // Confronta le versioni principali (semver)
+                    const versionCompare = semver.compare(versionA, versionB);
+                    if (versionCompare !== 0) {
+                        return versionCompare;
+                    }
+
+                    // Se le versioni principali sono uguali, confrontiamo i suffissi numerici (variantA, variantB)
+                    if (variantA === "" && variantB !== "") {
+                        return -1;  // Priorità al tag senza suffisso
+                    }
+                    if (variantA !== "" && variantB === "") {
+                        return 1;  // Priorità bassa al tag con suffisso
+                    }
+
+                    // Confrontiamo i numeri di versione dei suffissi (3.x)
+                    return semver.compare(variantA, variantB);
+                }
+
+                return 0;
+            });
         };
 
         const currentTag = artifactName;
         const alpineTags = await getAlpineTags(namespace, repository, currentTag);
-
-        const sortTags = (tags) => {
-            return tags.sort((a, b) => {
-                const [versionA] = a.split("-alpine");
-                const [versionB] = b.split("-alpine");
-
-                return semver.compare(versionA, versionB);
-            });
-        };
 
         if (alpineTags.length > 0) {
             const sortedTags = sortTags(alpineTags);
