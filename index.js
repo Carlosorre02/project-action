@@ -20,7 +20,7 @@ let summaryReport = {
     baseImage: "",
     severity: "LOW, MEDIUM, HIGH, CRITICAL", // La severity utilizzata
     iterationCount: 0,
-    versionSelectionLogic: "La priorità è stata data prima alle patch version, poi alle minor e infine alle major version.",
+    versionSelectionLogic: "La priorità è stata data prima alle minor version (es. alpine3.18), poi alle patch version e infine alle versioni principali.",
     imagesAnalyzed: [], // Dettagli sulle immagini analizzate
 };
 
@@ -160,12 +160,12 @@ fs.readFile(reportPath, "utf8", async (err, data) => {
                         return versionCompare;
                     }
 
-                    // Se le versioni principali sono uguali, confrontiamo i suffissi numerici come stringhe
-                    if (variantA === "" && variantB !== "") {
-                        return -1;  // Priorità al tag senza suffisso
-                    }
+                    // Priorità ai tag con suffisso numerico "-alpine3.x" rispetto a "-alpine"
                     if (variantA !== "" && variantB === "") {
-                        return 1;  // Priorità bassa al tag con suffisso
+                        return -1;  // Il suffisso numerico ha priorità
+                    }
+                    if (variantA === "" && variantB !== "") {
+                        return 1;  // "-alpine" ha meno priorità
                     }
 
                     // Confrontiamo i suffissi numerici come stringhe
