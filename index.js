@@ -160,7 +160,7 @@ fs.readFile(reportPath, "utf8", async (err, data) => {
                         return versionCompare;
                     }
 
-                    // Se le versioni principali sono uguali, confrontiamo i suffissi numerici (variantA, variantB)
+                    // Se le versioni principali sono uguali, confrontiamo i suffissi numerici come stringhe
                     if (variantA === "" && variantB !== "") {
                         return -1;  // Priorità al tag senza suffisso
                     }
@@ -168,8 +168,8 @@ fs.readFile(reportPath, "utf8", async (err, data) => {
                         return 1;  // Priorità bassa al tag con suffisso
                     }
 
-                    // Confrontiamo i numeri di versione dei suffissi (3.x)
-                    return semver.compare(variantA, variantB);
+                    // Confrontiamo i suffissi numerici come stringhe
+                    return variantA.localeCompare(variantB);
                 }
 
                 return 0;
