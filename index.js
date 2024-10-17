@@ -1,6 +1,7 @@
 const fs = require("fs");
 const core = require("@actions/core");
 const axios = require("axios");
+const semver = require("semver"); // Assicurati di includere questa riga
 const { exec } = require("child_process");
 const artifact = require("@actions/artifact");
 
@@ -90,7 +91,7 @@ fs.readFile(reportPath, "utf8", async (err, data) => {
             summaryReport.imagesAnalyzed.push(processedCve);
         });
 
-        // Rimuovi la logica di ordinamento dei tag Alpine
+        // Funzione per ottenere i tag successivi
         const getNextTags = async (namespace, repository, currentTag) => {
             let url = `https://hub.docker.com/v2/repositories/${namespace}/${repository}/tags/?page_size=100`;
             let tags = [];
@@ -126,7 +127,7 @@ fs.readFile(reportPath, "utf8", async (err, data) => {
         };
 
         const currentTag = artifactName;
-        const namespace = "library"; // O dinamicamente dal nome dell'immagine
+        const namespace = "library";
         const repository = artifactName.split(":")[0];
 
         // Ottieni le versioni successive
@@ -135,66 +136,6 @@ fs.readFile(reportPath, "utf8", async (err, data) => {
         if (nextTags.length > 0) {
             const top5Images = nextTags.slice(0, 5);
 
-            const trivyScan = async (image, reportFileName) => {
-                return new Promise((resolve, reject) => {
-                    exec(
-                        `trivy image --format json --output ${reportFileName} --severity LOW,MEDIUM,HIGH,CRITICAL ${image}`,
-                        (error, stdout, stderr) => {
-                            if (error) {
-                                reject(`Errore durante la scansione di Trivy per l'immagine ${image}: ${stderr}`);
-                            } else {
-                                resolve(`Trivy report per ${image} salvato.`);
-                            }
-                        }
-                    );
-                });
-            };
-
-            const uploadArtifactForImage = async (reportFileName) => {
-                try {
-                    const artifactClient = artifact.create();
-                    await artifactClient.uploadArtifact(reportFileName, [reportFileName], '.');
-
-                    const repository = process.env.GITHUB_REPOSITORY;
-                    const runId = process.env.GITHUB_RUN_ID;
-                    const reportLink = `https://github.com/${repository}/actions/runs/${runId}/artifacts`;
-
-                    core.info(`Upload Trivy JSON Report for ${reportFileName}: ${reportLink}`);
-                } catch (err) {
-                    core.setFailed(`Errore nel caricamento del report per l'immagine ${reportFileName}: ${err}`);
-                }
-            };
-
-            const parseTrivyReport = (image) => {
-                const reportPath = `trivy-report-${image}.json`;
-                const reportData = fs.readFileSync(reportPath, "utf8");
-                const report = JSON.parse(reportData);
-
-                report.Results.forEach((result) => {
-                    core.info(`Target: ${result.Target}`);
-
-                    const relevantVulns = result.Vulnerabilities || [];
-                    
-                    relevantVulns.forEach((vuln) => {
-                        core.info(`Package: ${vuln.PkgName}`);
-                        core.info(`Vulnerability ID: ${vuln.VulnerabilityID}`);
-                        core.info(`Severity: ${vuln.Severity}`);
-                        core.info(`Installed Version: ${vuln.InstalledVersion}`);
-                        core.info(`Fixed Version: ${vuln.FixedVersion || "No fix available"}`);
-                        core.info("---");
-                    });
-
-                    if (relevantVulns.length === 0) {
-                        core.info(`Nessuna vulnerabilità trovata per ${result.Target}`);
-                    }
-
-                    // Aggiungi solo i CVE al report riassuntivo
-                    const processedCve = processCve(result, result.Target);
-                    summaryReport.imagesAnalyzed.push(processedCve);
-                });
-            };
-
-            // Scansiona le immagini successive
             for (const image of top5Images) {
                 core.info(`Inizio scansione per immagine: ${image}`);
                 try {
