@@ -1,7 +1,6 @@
 const fs = require("fs");
 const core = require("@actions/core");
 const axios = require("axios");
-const semver = require("semver");
 const { exec } = require("child_process");
 const artifact = require("@actions/artifact");
 
@@ -20,7 +19,6 @@ let summaryReport = {
     baseImage: "",
     severity: "LOW, MEDIUM, HIGH, CRITICAL", // La severity utilizzata
     iterationCount: 0,
-    versionSelectionLogic: "La priorità è stata data prima alle minor version (es. alpine3.18), poi alle patch version e infine alle versioni principali.",
     imagesAnalyzed: [], // Dettagli sulle immagini analizzate
 };
 
@@ -69,45 +67,32 @@ fs.readFile(reportPath, "utf8", async (err, data) => {
 
         // Iterare attraverso i risultati del report per l'immagine base
         report.Results.forEach((result) => {
-            if (result.Target && result.Target !== "Node.js") {
-                core.info(`Target: ${result.Target}`);
+            core.info(`Target: ${result.Target}`);
 
-                const relevantVulns = result.Vulnerabilities || [];
-                
-                relevantVulns.forEach((vuln) => {
-                    // Manteniamo l'output dettagliato nel workflow
-                    core.info(`Package: ${vuln.PkgName}`);
-                    core.info(`Vulnerability ID: ${vuln.VulnerabilityID}`);
-                    core.info(`Severity: ${vuln.Severity}`);
-                    core.info(`Installed Version: ${vuln.InstalledVersion}`);
-                    core.info(`Fixed Version: ${vuln.FixedVersion || "No fix available"}`);
-                    core.info("---");
-                });
+            const relevantVulns = result.Vulnerabilities || [];
+            
+            relevantVulns.forEach((vuln) => {
+                // Manteniamo l'output dettagliato nel workflow
+                core.info(`Package: ${vuln.PkgName}`);
+                core.info(`Vulnerability ID: ${vuln.VulnerabilityID}`);
+                core.info(`Severity: ${vuln.Severity}`);
+                core.info(`Installed Version: ${vuln.InstalledVersion}`);
+                core.info(`Fixed Version: ${vuln.FixedVersion || "No fix available"}`);
+                core.info("---");
+            });
 
-                if (relevantVulns.length === 0) {
-                    core.info(`Nessuna vulnerabilità trovata per ${result.Target}`);
-                }
-
-                // Aggiungi le informazioni dei CVE al report riassuntivo
-                const processedCve = processCve(result, result.Target);
-                summaryReport.imagesAnalyzed.push(processedCve);
+            if (relevantVulns.length === 0) {
+                core.info(`Nessuna vulnerabilità trovata per ${result.Target}`);
             }
+
+            // Aggiungi le informazioni dei CVE al report riassuntivo
+            const processedCve = processCve(result, result.Target);
+            summaryReport.imagesAnalyzed.push(processedCve);
         });
 
-        const parts = artifactName.split(":")[0].split("/");
-        let namespace = "library";
-        let repository = parts[0];
-
-        if (parts.length === 2) {
-            namespace = parts[0];
-            repository = parts[1];
-        }
-
-        core.info(`Namespace: ${namespace}`);
-        core.info(`Repository: ${repository}`);
-
-        const getAlpineTags = async (namespace, repository, currentTag) => {
-            let url = `https://hub.docker.com/v2/repositories/${namespace}/${repository}/tags/?name=alpine&page_size=100`;
+        // Rimuovi la logica di ordinamento dei tag Alpine
+        const getNextTags = async (namespace, repository, currentTag) => {
+            let url = `https://hub.docker.com/v2/repositories/${namespace}/${repository}/tags/?page_size=100`;
             let tags = [];
 
             while (url) {
@@ -120,12 +105,12 @@ fs.readFile(reportPath, "utf8", async (err, data) => {
                         process.exit(1);
                     }
 
-                    const currentVersion = currentTag.split(":")[1].split("-alpine")[0];
+                    const currentVersion = currentTag.split(":")[1];
 
+                    // Aggiungi solo le versioni successive a currentVersion
                     pageTags.forEach((tag) => {
-                        const tagVersion = tag.name.split("-alpine")[0];
-
-                        if (tag.name.includes("alpine") && semver.valid(tagVersion) && semver.gt(tagVersion, currentVersion)) {
+                        const tagVersion = tag.name;
+                        if (semver.valid(tagVersion) && semver.gt(tagVersion, currentVersion)) {
                             tags.push(tag.name);
                         }
                     });
@@ -137,65 +122,28 @@ fs.readFile(reportPath, "utf8", async (err, data) => {
                 }
             }
 
-            return sortTags(tags);
-        };
-
-        // Funzione di ordinamento dei tag con priorità corretta
-        const sortTags = (tags) => {
-            return tags.sort((a, b) => {
-                const regex = /(\d+\.\d+\.\d+)-alpine(?:([\d\.]+))?/;
-
-                const matchA = a.match(regex);
-                const matchB = b.match(regex);
-
-                if (matchA && matchB) {
-                    const versionA = matchA[1];
-                    const variantA = matchA[2] || "";  // Se non c'è variante, trattiamola come prioritaria
-                    const versionB = matchB[1];
-                    const variantB = matchB[2] || "";
-
-                    // Confronta le versioni principali (semver)
-                    const versionCompare = semver.compare(versionA, versionB);
-                    if (versionCompare !== 0) {
-                        return versionCompare;
-                    }
-
-                    // Priorità ai tag con suffisso numerico "-alpine3.x" rispetto a "-alpine"
-                    if (variantA !== "" && variantB === "") {
-                        return -1;  // Il suffisso numerico ha priorità
-                    }
-                    if (variantA === "" && variantB !== "") {
-                        return 1;  // "-alpine" ha meno priorità
-                    }
-
-                    // Confrontiamo i suffissi numerici come stringhe
-                    return variantA.localeCompare(variantB);
-                }
-
-                return 0;
-            });
+            return tags;
         };
 
         const currentTag = artifactName;
-        const alpineTags = await getAlpineTags(namespace, repository, currentTag);
+        const namespace = "library"; // O dinamicamente dal nome dell'immagine
+        const repository = artifactName.split(":")[0];
 
-        if (alpineTags.length > 0) {
-            const sortedTags = sortTags(alpineTags);
-            core.info("Alpine Tags ordinati:");
-            sortedTags.forEach((tag) => core.info(`  Tag: ${tag}`));
+        // Ottieni le versioni successive
+        const nextTags = await getNextTags(namespace, repository, currentTag);
 
-            const top5Images = sortedTags.slice(0, 5);
+        if (nextTags.length > 0) {
+            const top5Images = nextTags.slice(0, 5);
 
             const trivyScan = async (image, reportFileName) => {
-                const fullImageName = `library/node:${image}`;
                 return new Promise((resolve, reject) => {
                     exec(
-                        `trivy image --format json --output ${reportFileName} --severity LOW,MEDIUM,HIGH,CRITICAL ${fullImageName}`,
+                        `trivy image --format json --output ${reportFileName} --severity LOW,MEDIUM,HIGH,CRITICAL ${image}`,
                         (error, stdout, stderr) => {
                             if (error) {
-                                reject(`Errore durante la scansione di Trivy per l'immagine ${fullImageName}: ${stderr}`);
+                                reject(`Errore durante la scansione di Trivy per l'immagine ${image}: ${stderr}`);
                             } else {
-                                resolve(`Trivy report per ${fullImageName} salvato.`);
+                                resolve(`Trivy report per ${image} salvato.`);
                             }
                         }
                     );
@@ -223,31 +171,30 @@ fs.readFile(reportPath, "utf8", async (err, data) => {
                 const report = JSON.parse(reportData);
 
                 report.Results.forEach((result) => {
-                    if (result.Target && result.Target !== "Node.js") {
-                        core.info(`Target: ${result.Target}`);
+                    core.info(`Target: ${result.Target}`);
 
-                        const relevantVulns = result.Vulnerabilities || [];
-                        
-                        relevantVulns.forEach((vuln) => {
-                            core.info(`Package: ${vuln.PkgName}`);
-                            core.info(`Vulnerability ID: ${vuln.VulnerabilityID}`);
-                            core.info(`Severity: ${vuln.Severity}`);
-                            core.info(`Installed Version: ${vuln.InstalledVersion}`);
-                            core.info(`Fixed Version: ${vuln.FixedVersion || "No fix available"}`);
-                            core.info("---");
-                        });
+                    const relevantVulns = result.Vulnerabilities || [];
+                    
+                    relevantVulns.forEach((vuln) => {
+                        core.info(`Package: ${vuln.PkgName}`);
+                        core.info(`Vulnerability ID: ${vuln.VulnerabilityID}`);
+                        core.info(`Severity: ${vuln.Severity}`);
+                        core.info(`Installed Version: ${vuln.InstalledVersion}`);
+                        core.info(`Fixed Version: ${vuln.FixedVersion || "No fix available"}`);
+                        core.info("---");
+                    });
 
-                        if (relevantVulns.length === 0) {
-                            core.info(`Nessuna vulnerabilità trovata per ${result.Target}`);
-                        }
-
-                        // Aggiungi solo i CVE al report riassuntivo
-                        const processedCve = processCve(result, result.Target);
-                        summaryReport.imagesAnalyzed.push(processedCve);
+                    if (relevantVulns.length === 0) {
+                        core.info(`Nessuna vulnerabilità trovata per ${result.Target}`);
                     }
+
+                    // Aggiungi solo i CVE al report riassuntivo
+                    const processedCve = processCve(result, result.Target);
+                    summaryReport.imagesAnalyzed.push(processedCve);
                 });
             };
 
+            // Scansiona le immagini successive
             for (const image of top5Images) {
                 core.info(`Inizio scansione per immagine: ${image}`);
                 try {
@@ -275,7 +222,7 @@ fs.readFile(reportPath, "utf8", async (err, data) => {
             await artifactClient.uploadArtifact("summary-report.json", ["summary-report.json"], ".");
 
         } else {
-            core.info("Non sono stati trovati tag Alpine più recenti.");
+            core.info("Non sono stati trovati tag più recenti.");
         }
     } catch (parseErr) {
         core.setFailed(`Error parsing the report: ${parseErr.message}`);
