@@ -20,7 +20,7 @@ let summaryReport = {
     baseImage: "",
     severity: "LOW, MEDIUM, HIGH, CRITICAL", // La severity utilizzata
     iterationCount: 0,
-    versionSelectionLogic: "Le versioni successive sono ordinate in base alla versione semantica, dalla più recente alla meno recente.",
+    versionSelectionLogic: "Le versioni successive sono ordinate in base alla versione semantica, dalla più vecchia alla più recente (crescente).",
     imagesAnalyzed: [], // Dettagli sulle immagini analizzate
 };
 
@@ -140,11 +140,11 @@ fs.readFile(reportPath, "utf8", async (err, data) => {
             return sortTags(tags);
         };
 
-        // Funzione di ordinamento dei tag basato sulla versione semantica
+        // Funzione di ordinamento dei tag in ordine crescente
         const sortTags = (tags) => {
             return tags.sort((a, b) => {
                 if (semver.valid(a) && semver.valid(b)) {
-                    return semver.compare(b, a); // Ordine decrescente
+                    return semver.compare(a, b); // Ordine crescente
                 }
                 return 0;
             });
@@ -154,7 +154,7 @@ fs.readFile(reportPath, "utf8", async (err, data) => {
         const availableTags = await getTags(namespace, repository, currentTag);
 
         if (availableTags.length > 0) {
-            const sortedTags = sortTags(availableTags);
+            const sortedTags = sortTags(availableTags); // Ordinati in ordine crescente
             core.info("Tag disponibili ordinati:");
             sortedTags.forEach((tag) => core.info(`  Tag: ${tag}`));
 
@@ -231,7 +231,7 @@ fs.readFile(reportPath, "utf8", async (err, data) => {
                     await uploadArtifactForImage(reportFileName);
                     parseTrivyReport(image);
 
-                    await sleep(10000);
+                    await sleep(2000);  // Ritardo tra le scansioni
                 } catch (err) {
                     core.setFailed(`Errore nella scansione di ${image}: ${err}`);
                 }
