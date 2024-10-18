@@ -231,7 +231,7 @@ fs.readFile(reportPath, "utf8", async (err, data) => {
                     await uploadArtifactForImage(reportFileName);
                     parseTrivyReport(image);
 
-                    await sleep(2000);
+                    await sleep(10000);
                 } catch (err) {
                     core.setFailed(`Errore nella scansione di ${image}: ${err}`);
                 }
