@@ -180,70 +180,7 @@ fs.readFile(reportPath, "utf8", async (err, data) => {
             core.info("Tag disponibili ordinati:");
             sortedTags.forEach((tag) => core.info(`  Tag: ${tag}`));
 
-            const top5Images = sortedTags.slice(0, 5);
-
-            const trivyScan = async (image, reportFileName) => {
-                const fullImageName = `${namespace}/${repository}:${image}`;
-                return new Promise((resolve, reject) => {
-                    exec(
-                        `trivy image --format json --output ${reportFileName} --severity LOW,MEDIUM,HIGH,CRITICAL ${fullImageName}`,
-                        (error, stdout, stderr) => {
-                            if (error) {
-                                reject(`Errore durante la scansione di Trivy per l'immagine ${fullImageName}: ${stderr}`);
-                            } else {
-                                resolve(`Trivy report per ${fullImageName} salvato.`);
-                            }
-                        }
-                    );
-                });
-            };
-
-            const uploadArtifactForImage = async (reportFileName) => {
-                try {
-                    const artifactClient = artifact.create();
-                    await artifactClient.uploadArtifact(reportFileName, [reportFileName], '.');
-
-                    const repositoryEnv = process.env.GITHUB_REPOSITORY;
-                    const runId = process.env.GITHUB_RUN_ID;
-                    const reportLink = `https://github.com/${repositoryEnv}/actions/runs/${runId}/artifacts`;
-
-                    core.info(`Upload Trivy JSON Report for ${reportFileName}: ${reportLink}`);
-                } catch (err) {
-                    core.setFailed(`Errore nel caricamento del report per l'immagine ${reportFileName}: ${err}`);
-                }
-            };
-
-            const parseTrivyReport = (image) => {
-                const reportPath = `trivy-report-${image}.json`;
-                const reportData = fs.readFileSync(reportPath, "utf8");
-                const report = JSON.parse(reportData);
-
-                report.Results.forEach((result) => {
-                    if (result.Target) {
-                        core.info(`Target: ${result.Target}`);
-
-                        const relevantVulns = result.Vulnerabilities || [];
-                        
-                        relevantVulns.forEach((vuln) => {
-                            core.info(`Package: ${vuln.PkgName}`);
-                            core.info(`Vulnerability ID: ${vuln.VulnerabilityID}`);
-                            core.info(`Severity: ${vuln.Severity}`);
-                            core.info(`Installed Version: ${vuln.InstalledVersion}`);
-                            core.info(`Fixed Version: ${vuln.FixedVersion || "No fix available"}`);
-                            core.info("---");
-                        });
-
-                        if (relevantVulns.length === 0) {
-                            core.info(`Nessuna vulnerabilità trovata per ${result.Target}`);
-                        }
-
-                        const processedCve = processCve(result, result.Target);
-                        summaryReport.imagesAnalyzed.push(processedCve);
-                    }
-                });
-            };
-
-            for (const image of top5Images) {
+            for (const image of sortedTags) {
                 core.info(`Inizio scansione per immagine: ${image}`);
                 try {
                     const reportFileName = `trivy-report-${image}.json`;
@@ -258,7 +195,7 @@ fs.readFile(reportPath, "utf8", async (err, data) => {
                 }
             }
 
-            summaryReport.iterationCount = top5Images.length;
+            summaryReport.iterationCount = sortedTags.length;
 
             fs.writeFileSync("summary-report.json", JSON.stringify(summaryReport, null, 2));
             core.info("Summary report generated successfully!");
@@ -274,3 +211,67 @@ fs.readFile(reportPath, "utf8", async (err, data) => {
         process.exit(1);
     }
 });
+
+// Funzione per eseguire la scansione Trivy e generare il report
+const trivyScan = async (image, reportFileName) => {
+    const fullImageName = `${namespace}/${repository}:${image}`;
+    return new Promise((resolve, reject) => {
+        exec(
+            `trivy image --format json --output ${reportFileName} --severity LOW,MEDIUM,HIGH,CRITICAL ${fullImageName}`,
+            (error, stdout, stderr) => {
+                if (error) {
+                    reject(`Errore durante la scansione di Trivy per l'immagine ${fullImageName}: ${stderr}`);
+                } else {
+                    resolve(`Trivy report per ${fullImageName} salvato.`);
+                }
+            }
+        );
+    });
+};
+
+// Funzione per caricare il report Trivy come artifact
+const uploadArtifactForImage = async (reportFileName) => {
+    try {
+        const artifactClient = artifact.create();
+        await artifactClient.uploadArtifact(reportFileName, [reportFileName], '.');
+
+        const repositoryEnv = process.env.GITHUB_REPOSITORY;
+        const runId = process.env.GITHUB_RUN_ID;
+        const reportLink = `https://github.com/${repositoryEnv}/actions/runs/${runId}/artifacts`;
+
+        core.info(`Upload Trivy JSON Report for ${reportFileName}: ${reportLink}`);
+    } catch (err) {
+        core.setFailed(`Errore nel caricamento del report per l'immagine ${reportFileName}: ${err}`);
+    }
+};
+
+// Funzione per parsare il report Trivy per ogni immagine
+const parseTrivyReport = (image) => {
+    const reportPath = `trivy-report-${image}.json`;
+    const reportData = fs.readFileSync(reportPath, "utf8");
+    const report = JSON.parse(reportData);
+
+    report.Results.forEach((result) => {
+        if (result.Target) {
+            core.info(`Target: ${result.Target}`);
+
+            const relevantVulns = result.Vulnerabilities || [];
+            
+            relevantVulns.forEach((vuln) => {
+                core.info(`Package: ${vuln.PkgName}`);
+                core.info(`Vulnerability ID: ${vuln.VulnerabilityID}`);
+                core.info(`Severity: ${vuln.Severity}`);
+                core.info(`Installed Version: ${vuln.InstalledVersion}`);
+                core.info(`Fixed Version: ${vuln.FixedVersion || "No fix available"}`);
+                core.info("---");
+            });
+
+            if (relevantVulns.length === 0) {
+                core.info(`Nessuna vulnerabilità trovata per ${result.Target}`);
+            }
+
+            const processedCve = processCve(result, result.Target);
+            summaryReport.imagesAnalyzed.push(processedCve);
+        }
+    });
+};
