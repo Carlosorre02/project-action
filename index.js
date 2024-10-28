@@ -5,7 +5,6 @@ const semver = require("semver");
 const { exec } = require("child_process");
 const artifact = require("@actions/artifact");
 
-// Funzione per aggiungere un ritardo
 const sleep = (ms) => new Promise((resolve) => setTimeout(resolve, ms));
 
 const reportPath = core.getInput("trivy-report");
@@ -15,40 +14,59 @@ if (!reportPath) {
     process.exit(1);
 }
 
-// Aggiungi la struttura del report riassuntivo
 let summaryReport = {
     baseImage: "",
-    severity: "LOW, MEDIUM, HIGH, CRITICAL", // La severity utilizzata
+    severity: "LOW, MEDIUM, HIGH, CRITICAL",
     iterationCount: 0,
     versionSelectionLogic: "Le versioni successive sono ordinate in base alla versione semantica, dalla più vecchia alla più recente (crescente).",
-    imagesAnalyzed: [], // Dettagli sulle immagini analizzate
+    imagesAnalyzed: [],
 };
 
-// Funzione per estrarre solo i CVE delle vulnerabilità separate per gravità
 const extractCveBySeverity = (vulnerabilities) => {
     const cveBySeverity = { LOW: [], MEDIUM: [], HIGH: [], CRITICAL: [] };
-
     vulnerabilities.forEach((vuln) => {
         if (vuln.VulnerabilityID) {
             cveBySeverity[vuln.Severity.toUpperCase()].push(vuln.VulnerabilityID);
         }
     });
-
     return cveBySeverity;
 };
 
-// Funzione per iterare attraverso i risultati e separare solo i CVE per gravità
 const processCve = (results, target) => {
     const vulnerabilities = results.Vulnerabilities || [];
     const cveBySeverity = extractCveBySeverity(vulnerabilities);
-
-    return {
-        target,
-        vulnerabilities: cveBySeverity,
-    };
+    return { target, vulnerabilities: cveBySeverity };
 };
 
-// Legge il report e processa i tag e le scansioni
+const trivyScan = async (image, reportFileName) => {
+    const fullImageName = `${image}`;
+    return new Promise((resolve, reject) => {
+        exec(
+            `trivy image --format json --output ${reportFileName} --severity LOW,MEDIUM,HIGH,CRITICAL ${fullImageName}`,
+            (error, stdout, stderr) => {
+                if (error) {
+                    reject(`Errore durante la scansione di Trivy per l'immagine ${fullImageName}: ${stderr}`);
+                } else {
+                    resolve(`Trivy report per ${fullImageName} salvato.`);
+                }
+            }
+        );
+    });
+};
+
+const uploadArtifactForImage = async (reportFileName) => {
+    try {
+        const artifactClient = artifact.create();
+        await artifactClient.uploadArtifact(reportFileName, [reportFileName], '.');
+        const repositoryEnv = process.env.GITHUB_REPOSITORY;
+        const runId = process.env.GITHUB_RUN_ID;
+        const reportLink = `https://github.com/${repositoryEnv}/actions/runs/${runId}/artifacts`;
+        core.info(`Upload Trivy JSON Report for ${reportFileName}: ${reportLink}`);
+    } catch (err) {
+        core.setFailed(`Errore nel caricamento del report per l'immagine ${reportFileName}: ${err}`);
+    }
+};
+
 fs.readFile(reportPath, "utf8", async (err, data) => {
     if (err) {
         core.setFailed(`Error reading the report: ${err.message}`);
@@ -64,15 +82,12 @@ fs.readFile(reportPath, "utf8", async (err, data) => {
             process.exit(1);
         }
 
-        // Imposta l'immagine base nel report riassuntivo
         summaryReport.baseImage = artifactName;
         core.info(`Base Image: ${artifactName}`);
 
-        // Estrai la major version dell'immagine base per il filtraggio
         const baseVersion = artifactName.split(":")[1] || "";
         const baseMajorVersion = semver.major(baseVersion);
 
-        // Itera sui risultati del report per l'immagine base
         report.Results.forEach((result) => {
             if (result.Target) {
                 core.info(`Target: ${result.Target}`);
@@ -91,13 +106,11 @@ fs.readFile(reportPath, "utf8", async (err, data) => {
                     core.info(`Nessuna vulnerabilità trovata per ${result.Target}`);
                 }
 
-                // Aggiungi le informazioni dei CVE al report riassuntivo
                 const processedCve = processCve(result, result.Target);
                 summaryReport.imagesAnalyzed.push(processedCve);
             }
         });
 
-        // Estrai il namespace e il repository dall'immagine base
         const parts = artifactName.split(":")[0].split("/");
         let namespace = "library";
         let repository = parts[0];
@@ -127,7 +140,6 @@ fs.readFile(reportPath, "utf8", async (err, data) => {
 
                     pageTags.forEach((tag) => {
                         const tagVersion = tag.name;
-                        // Controlla se la versione è valida e ha la stessa major version
                         if (semver.valid(tagVersion) && semver.major(tagVersion) === baseMajorVersion && semver.gt(tagVersion, currentVersion)) {
                             tags.push(tag.name);
                         }
@@ -143,11 +155,10 @@ fs.readFile(reportPath, "utf8", async (err, data) => {
             return sortTags(tags);
         };
 
-        // Funzione di ordinamento dei tag in ordine crescente
         const sortTags = (tags) => {
             return tags.sort((a, b) => {
                 if (semver.valid(a) && semver.valid(b)) {
-                    return semver.compare(a, b); // Ordine crescente
+                    return semver.compare(a, b);
                 }
                 return 0;
             });
@@ -157,7 +168,7 @@ fs.readFile(reportPath, "utf8", async (err, data) => {
         const availableTags = await getTags(namespace, repository, currentTag);
 
         if (availableTags.length > 0) {
-            const sortedTags = sortTags(availableTags); // Ordinati in ordine crescente
+            const sortedTags = sortTags(availableTags);
             core.info("Tag disponibili ordinati:");
             sortedTags.forEach((tag) => core.info(`  Tag: ${tag}`));
 
@@ -170,8 +181,7 @@ fs.readFile(reportPath, "utf8", async (err, data) => {
                 try {
                     await trivyScan(image, reportFileName);
                     await uploadArtifactForImage(reportFileName);
-                    parseTrivyReport(image);
-                    await sleep(2000); // Ritardo tra le scansioni
+                    await sleep(2000);
                 } catch (err) {
                     core.setFailed(`Errore nella scansione di ${image}: ${err}`);
                 }
