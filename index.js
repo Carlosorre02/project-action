@@ -67,6 +67,14 @@ fs.readFile(reportPath, "utf8", async (err, data) => {
         summaryReport.baseImage = artifactName;
         core.info(`Base Image: ${artifactName}`);
 
+        // Estrai la major version e la piattaforma dalla base image
+        const [baseImageName, baseTag] = artifactName.split(":");
+        const baseMajorVersion = baseTag.split(".")[0];
+        const basePlatform = baseTag.includes("-") ? baseTag.split("-")[1] : "";
+
+        core.info(`Base Major Version: ${baseMajorVersion}`);
+        core.info(`Base Platform: ${basePlatform}`);
+
         // Iterare attraverso i risultati del report per l'immagine base
         report.Results.forEach((result) => {
             if (result.Target) {
@@ -75,7 +83,6 @@ fs.readFile(reportPath, "utf8", async (err, data) => {
                 const relevantVulns = result.Vulnerabilities || [];
                 
                 relevantVulns.forEach((vuln) => {
-                    // Manteniamo l'output dettagliato nel workflow
                     core.info(`Package: ${vuln.PkgName}`);
                     core.info(`Vulnerability ID: ${vuln.VulnerabilityID}`);
                     core.info(`Severity: ${vuln.Severity}`);
@@ -111,9 +118,6 @@ fs.readFile(reportPath, "utf8", async (err, data) => {
             let url = `https://hub.docker.com/v2/repositories/${namespace}/${repository}/tags/?page_size=100`;
             let tags = [];
 
-            // Estrai la major version dall'immagine base
-            const baseMajorVersion = currentTag.split(":")[1].split(".")[0];
-
             while (url) {
                 try {
                     const response = await axios.get(url);
@@ -128,12 +132,14 @@ fs.readFile(reportPath, "utf8", async (err, data) => {
 
                     pageTags.forEach((tag) => {
                         const tagVersion = tag.name;
+                        const [tagBase, tagPlatform] = tagVersion.split("-");
 
-                        // Filtra solo i tag con la stessa major version dell'immagine base
+                        // Verifica che la major version e la piattaforma coincidano con quella dell'immagine base
                         if (
-                            semver.valid(tagVersion) &&
-                            semver.gt(tagVersion, currentVersion) &&
-                            semver.major(tagVersion) === parseInt(baseMajorVersion)
+                            semver.valid(tagBase) &&
+                            semver.gt(tagBase, currentVersion) &&
+                            semver.major(tagBase) === parseInt(baseMajorVersion) &&
+                            (!tagPlatform || tagPlatform === basePlatform)
                         ) {
                             tags.push(tag.name);
                         }
