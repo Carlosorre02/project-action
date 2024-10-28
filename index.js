@@ -1,4 +1,4 @@
-const fs = require("fs");
+const fs = require("fs");  
 const core = require("@actions/core");
 const axios = require("axios");
 const semver = require("semver");
@@ -48,40 +48,39 @@ const processCve = (results, target) => {
     };
 };
 
-// Funzione per contare le vulnerabilità per gravità
-const countVulnerabilitiesBySeverity = (vulnerabilities) => {
-    const counts = { CRITICAL: 0, HIGH: 0, MEDIUM: 0, LOW: 0 };
-    Object.keys(counts).forEach((severity) => {
-        counts[severity] = vulnerabilities[severity] ? vulnerabilities[severity].length : 0;
-    });
-    return counts;
-};
+// Funzione per parsare e visualizzare le vulnerabilità dell'immagine base
+const parseBaseImageReport = () => {
+    const reportData = fs.readFileSync(reportPath, "utf8");
+    const report = JSON.parse(reportData);
 
-// Funzione per determinare l'immagine migliore in base al conteggio delle vulnerabilità
-const determineBestImage = () => {
-    let baseImageCounts = countVulnerabilitiesBySeverity(summaryReport.imagesAnalyzed[0].vulnerabilities);
-    let bestImage = summaryReport.baseImage;
-    let bestCounts = baseImageCounts;
+    report.Results.forEach((result) => {
+        if (result.Target) {
+            core.info(Target: ${result.Target});
 
-    summaryReport.imagesAnalyzed.slice(1).forEach((image) => {
-        const imageCounts = countVulnerabilitiesBySeverity(image.vulnerabilities);
-        if (
-            imageCounts.CRITICAL < bestCounts.CRITICAL ||
-            (imageCounts.CRITICAL === bestCounts.CRITICAL && imageCounts.HIGH < bestCounts.HIGH) ||
-            (imageCounts.CRITICAL === bestCounts.CRITICAL && imageCounts.HIGH === bestCounts.HIGH && imageCounts.MEDIUM < bestCounts.MEDIUM) ||
-            (imageCounts.CRITICAL === bestCounts.CRITICAL && imageCounts.HIGH === bestCounts.HIGH && imageCounts.MEDIUM === bestCounts.MEDIUM && imageCounts.LOW < bestCounts.LOW)
-        ) {
-            bestCounts = imageCounts;
-            bestImage = image.target;
+            const relevantVulns = result.Vulnerabilities || [];
+            
+            relevantVulns.forEach((vuln) => {
+                core.info(Package: ${vuln.PkgName});
+                core.info(Vulnerability ID: ${vuln.VulnerabilityID});
+                core.info(Severity: ${vuln.Severity});
+                core.info(Installed Version: ${vuln.InstalledVersion});
+                core.info(Fixed Version: ${vuln.FixedVersion || "No fix available"});
+                core.info("---");
+            });
+
+            if (relevantVulns.length === 0) {
+                core.info(Nessuna vulnerabilità trovata per ${result.Target});
+            }
+
+            const processedCve = processCve(result, result.Target);
+            summaryReport.imagesAnalyzed.push(processedCve);
         }
     });
-
-    return bestImage;
 };
 
 fs.readFile(reportPath, "utf8", async (err, data) => {
     if (err) {
-        core.setFailed(`Error reading the report: ${err.message}`);
+        core.setFailed(Error reading the report: ${err.message});
         process.exit(1);
     }
 
@@ -96,48 +95,28 @@ fs.readFile(reportPath, "utf8", async (err, data) => {
 
         // Imposta l'immagine base nel report riassuntivo
         summaryReport.baseImage = artifactName;
-        core.info(`Base Image: ${artifactName}`);
+        core.info(Base Image: ${artifactName});
 
-        // Iterare attraverso i risultati del report per l'immagine base
-        report.Results.forEach((result) => {
-            if (result.Target) {
-                core.info(`Target: ${result.Target}`);
-
-                const relevantVulns = result.Vulnerabilities || [];
-                
-                relevantVulns.forEach((vuln) => {
-                    core.info(`Package: ${vuln.PkgName}`);
-                    core.info(`Vulnerability ID: ${vuln.VulnerabilityID}`);
-                    core.info(`Severity: ${vuln.Severity}`);
-                    core.info(`Installed Version: ${vuln.InstalledVersion}`);
-                    core.info(`Fixed Version: ${vuln.FixedVersion || "No fix available"}`);
-                    core.info("---");
-                });
-
-                if (relevantVulns.length === 0) {
-                    core.info(`Nessuna vulnerabilità trovata per ${result.Target}`);
-                }
-
-                const processedCve = processCve(result, result.Target);
-                summaryReport.imagesAnalyzed.push(processedCve);
-            }
-        });
+        // Esegui la scansione dell'immagine base e stampa i risultati
+        parseBaseImageReport();
 
         // Estrarre il namespace e il repository dall'immagine base
         const parts = artifactName.split(":")[0].split("/");
         let namespace = "library";
         let repository = parts[0];
+        let basePlatform = artifactName.includes("-") ? artifactName.split("-").pop() : "";
 
         if (parts.length === 2) {
             namespace = parts[0];
             repository = parts[1];
         }
 
-        core.info(`Namespace: ${namespace}`);
-        core.info(`Repository: ${repository}`);
+        core.info(Namespace: ${namespace});
+        core.info(Repository: ${repository});
+        core.info(Platform: ${basePlatform || "none specified"});
 
         const getTags = async (namespace, repository, currentTag) => {
-            let url = `https://hub.docker.com/v2/repositories/${namespace}/${repository}/tags/?page_size=100`;
+            let url = https://hub.docker.com/v2/repositories/${namespace}/${repository}/tags/?page_size=100;
             let tags = [];
 
             // Estrai la major version dall'immagine base
@@ -157,12 +136,17 @@ fs.readFile(reportPath, "utf8", async (err, data) => {
 
                     pageTags.forEach((tag) => {
                         const tagVersion = tag.name;
+                        const tagPlatform = tag.name.includes("-") ? tag.name.split("-").pop() : "";
 
-                        // Filtra solo i tag con la stessa major version dell'immagine base
+                        // Filtra solo i tag con la stessa major version e piattaforma dell'immagine base
                         if (
                             semver.valid(tagVersion) &&
                             semver.gt(tagVersion, currentVersion) &&
-                            semver.major(tagVersion) === parseInt(baseMajorVersion)
+                            semver.major(tagVersion) === parseInt(baseMajorVersion) &&
+                            (
+                                (basePlatform && tagPlatform === basePlatform) || // Entrambi devono avere la stessa piattaforma
+                                (!basePlatform && !tagPlatform) // Nessuno dei due ha una piattaforma
+                            )
                         ) {
                             tags.push(tag.name);
                         }
@@ -170,7 +154,7 @@ fs.readFile(reportPath, "utf8", async (err, data) => {
 
                     url = response.data.next;
                 } catch (apiErr) {
-                    core.setFailed(`Error fetching tags from Docker Hub: ${apiErr.message}`);
+                    core.setFailed(Error fetching tags from Docker Hub: ${apiErr.message});
                     process.exit(1);
                 }
             }
@@ -194,73 +178,12 @@ fs.readFile(reportPath, "utf8", async (err, data) => {
         if (availableTags.length > 0) {
             const sortedTags = sortTags(availableTags); // Ordinati in ordine crescente
             core.info("Tag disponibili ordinati:");
-            sortedTags.forEach((tag) => core.info(`  Tag: ${tag}`));
-
-            const trivyScan = async (namespace, repository, image, reportFileName) => {
-                const fullImageName = `${namespace}/${repository}:${image}`;
-                return new Promise((resolve, reject) => {
-                    exec(
-                        `trivy image --format json --output ${reportFileName} --vuln-type os,library --severity LOW,MEDIUM,HIGH,CRITICAL ${fullImageName}`,
-                        (error, stdout, stderr) => {
-                            if (error) {
-                                reject(`Errore durante la scansione di Trivy per l'immagine ${fullImageName}: ${stderr}`);
-                            } else {
-                                resolve(`Trivy report per ${fullImageName} salvato.`);
-                            }
-                        }
-                    );
-                });
-            };
-
-            const uploadArtifactForImage = async (reportFileName) => {
-                try {
-                    const artifactClient = artifact.create();
-                    await artifactClient.uploadArtifact(reportFileName, [reportFileName], '.');
-
-                    const repositoryEnv = process.env.GITHUB_REPOSITORY;
-                    const runId = process.env.GITHUB_RUN_ID;
-                    const reportLink = `https://github.com/${repositoryEnv}/actions/runs/${runId}/artifacts`;
-
-                    core.info(`Upload Trivy JSON Report for ${reportFileName}: ${reportLink}`);
-                } catch (err) {
-                    core.setFailed(`Errore nel caricamento del report per l'immagine ${reportFileName}: ${err}`);
-                }
-            };
-
-            const parseTrivyReport = (image) => {
-                const reportPath = `trivy-report-${image}.json`;
-                const reportData = fs.readFileSync(reportPath, "utf8");
-                const report = JSON.parse(reportData);
-
-                report.Results.forEach((result) => {
-                    if (result.Target) {
-                        core.info(`Target: ${result.Target}`);
-
-                        const relevantVulns = result.Vulnerabilities || [];
-                        
-                        relevantVulns.forEach((vuln) => {
-                            core.info(`Package: ${vuln.PkgName}`);
-                            core.info(`Vulnerability ID: ${vuln.VulnerabilityID}`);
-                            core.info(`Severity: ${vuln.Severity}`);
-                            core.info(`Installed Version: ${vuln.InstalledVersion}`);
-                            core.info(`Fixed Version: ${vuln.FixedVersion || "No fix available"}`);
-                            core.info("---");
-                        });
-
-                        if (relevantVulns.length === 0) {
-                            core.info(`Nessuna vulnerabilità trovata per ${result.Target}`);
-                        }
-
-                        const processedCve = processCve(result, result.Target);
-                        summaryReport.imagesAnalyzed.push(processedCve);
-                    }
-                });
-            };
+            sortedTags.forEach((tag) => core.info(  Tag: ${tag}));
 
             for (const image of sortedTags) {
-                core.info(`Inizio scansione per immagine: ${image}`);
+                core.info(Inizio scansione per immagine: ${image});
                 try {
-                    const reportFileName = `trivy-report-${image}.json`;
+                    const reportFileName = trivy-report-${image}.json;
 
                     await trivyScan(namespace, repository, image, reportFileName);
                     await uploadArtifactForImage(reportFileName);
@@ -268,7 +191,7 @@ fs.readFile(reportPath, "utf8", async (err, data) => {
 
                     await sleep(2000);  // Ritardo tra le scansioni
                 } catch (err) {
-                    core.setFailed(`Errore nella scansione di ${image}: ${err}`);
+                    core.setFailed(Errore nella scansione di ${image}: ${err});
                 }
             }
 
@@ -280,15 +203,75 @@ fs.readFile(reportPath, "utf8", async (err, data) => {
             const artifactClient = artifact.create();
             await artifactClient.uploadArtifact("summary-report.json", ["summary-report.json"], ".");
 
-            // Determina l'immagine migliore e logga il risultato
-            const bestImage = determineBestImage();
-            core.info(`L'immagine migliore è: ${bestImage}`);
-
         } else {
             core.info("Non sono stati trovati tag più recenti.");
         }
     } catch (parseErr) {
-        core.setFailed(`Error parsing the report: ${parseErr.message}`);
+        core.setFailed(Error parsing the report: ${parseErr.message});
         process.exit(1);
     }
 });
+
+// Funzione per eseguire la scansione Trivy e generare il report
+const trivyScan = async (namespace, repository, image, reportFileName) => {
+    const fullImageName = ${namespace}/${repository}:${image};
+    return new Promise((resolve, reject) => {
+        exec(
+            trivy image --format json --output ${reportFileName} --severity LOW,MEDIUM,HIGH,CRITICAL ${fullImageName},
+            (error, stdout, stderr) => {
+                if (error) {
+                    reject(Errore durante la scansione di Trivy per l'immagine ${fullImageName}: ${stderr});
+                } else {
+                    resolve(Trivy report per ${fullImageName} salvato.);
+                }
+            }
+        );
+    });
+};
+
+// Funzione per caricare il report Trivy come artifact
+const uploadArtifactForImage = async (reportFileName) => {
+    try {
+        const artifactClient = artifact.create();
+        await artifactClient.uploadArtifact(reportFileName, [reportFileName], '.');
+
+        const repositoryEnv = process.env.GITHUB_REPOSITORY;
+        const runId = process.env.GITHUB_RUN_ID;
+        const reportLink = https://github.com/${repositoryEnv}/actions/runs/${runId}/artifacts;
+
+        core.info(Upload Trivy JSON Report for ${reportFileName}: ${reportLink});
+    } catch (err) {
+        core.setFailed(Errore nel caricamento del report per l'immagine ${reportFileName}: ${err});
+    }
+};
+
+// Funzione per parsare il report Trivy per ogni immagine
+const parseTrivyReport = (image) => {
+    const reportPath = trivy-report-${image}.json;
+    const reportData = fs.readFileSync(reportPath, "utf8");
+    const report = JSON.parse(reportData);
+
+    report.Results.forEach((result) => {
+        if (result.Target) {
+            core.info(Target: ${result.Target});
+
+            const relevantVulns = result.Vulnerabilities || [];
+            
+            relevantVulns.forEach((vuln) => {
+                core.info(Package: ${vuln.PkgName});
+                core.info(Vulnerability ID: ${vuln.VulnerabilityID});
+                core.info(Severity: ${vuln.Severity});
+                core.info(Installed Version: ${vuln.InstalledVersion});
+                core.info(Fixed Version: ${vuln.FixedVersion || "No fix available"});
+                core.info("---");
+            });
+
+            if (relevantVulns.length === 0) {
+                core.info(Nessuna vulnerabilità trovata per ${result.Target});
+            }
+
+            const processedCve = processCve(result, result.Target);
+            summaryReport.imagesAnalyzed.push(processedCve);
+        }
+    });
+};
