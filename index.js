@@ -71,6 +71,7 @@ fs.readFile(reportPath, "utf8", async (err, data) => {
         const [baseImageName, baseTag] = artifactName.split(":");
         const baseMajorVersion = baseTag.split(".")[0];
         const basePlatform = baseTag.includes("-") ? baseTag.split("-")[1] : "";
+        const baseImageTag = artifactName.split(":")[1];
 
         core.info(`Base Major Version: ${baseMajorVersion}`);
         core.info(`Base Platform: ${basePlatform}`);
@@ -134,12 +135,13 @@ fs.readFile(reportPath, "utf8", async (err, data) => {
                         const tagVersion = tag.name;
                         const [tagBase, tagPlatform] = tagVersion.split("-");
 
-                        // Verifica che la major version e la piattaforma coincidano con quella dell'immagine base
+                        // Verifica che la major version, la piattaforma, e il tag non siano quello dell'immagine base
                         if (
                             semver.valid(tagBase) &&
                             semver.gt(tagBase, currentVersion) &&
                             semver.major(tagBase) === parseInt(baseMajorVersion) &&
-                            (!tagPlatform || tagPlatform === basePlatform)
+                            (!tagPlatform || tagPlatform === basePlatform) &&
+                            tagVersion !== baseImageTag
                         ) {
                             tags.push(tag.name);
                         }
