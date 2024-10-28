@@ -111,6 +111,9 @@ fs.readFile(reportPath, "utf8", async (err, data) => {
             let url = `https://hub.docker.com/v2/repositories/${namespace}/${repository}/tags/?page_size=100`;
             let tags = [];
 
+            // Estrai la major version dall'immagine base
+            const baseMajorVersion = currentTag.split(":")[1].split(".")[0];
+
             while (url) {
                 try {
                     const response = await axios.get(url);
@@ -125,7 +128,13 @@ fs.readFile(reportPath, "utf8", async (err, data) => {
 
                     pageTags.forEach((tag) => {
                         const tagVersion = tag.name;
-                        if (semver.valid(tagVersion) && semver.gt(tagVersion, currentVersion)) {
+
+                        // Filtra solo i tag con la stessa major version dell'immagine base
+                        if (
+                            semver.valid(tagVersion) &&
+                            semver.gt(tagVersion, currentVersion) &&
+                            semver.major(tagVersion) === parseInt(baseMajorVersion)
+                        ) {
                             tags.push(tag.name);
                         }
                     });
