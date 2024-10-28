@@ -180,9 +180,6 @@ fs.readFile(reportPath, "utf8", async (err, data) => {
             core.info("Tag disponibili ordinati:");
             sortedTags.forEach((tag) => core.info(`  Tag: ${tag}`));
 
-            let bestImage = artifactName; // di default è l'immagine base
-            let bestImageVulnerabilities = summaryReport.imagesAnalyzed[0].vulnerabilities;
-
             for (const image of sortedTags) {
                 core.info(`Inizio scansione per immagine: ${image}`);
                 try {
@@ -191,22 +188,6 @@ fs.readFile(reportPath, "utf8", async (err, data) => {
                     await trivyScan(namespace, repository, image, reportFileName);
                     await uploadArtifactForImage(reportFileName);
                     parseTrivyReport(image);
-
-                    const currentImageVulnerabilities = summaryReport.imagesAnalyzed[summaryReport.imagesAnalyzed.length - 1].vulnerabilities;
-                    const severities = ["CRITICAL", "HIGH", "MEDIUM", "LOW"];
-
-                    for (const severity of severities) {
-                        const bestCount = bestImageVulnerabilities[severity]?.length || 0;
-                        const currentCount = currentImageVulnerabilities[severity]?.length || 0;
-
-                        if (currentCount < bestCount) {
-                            bestImage = image;
-                            bestImageVulnerabilities = currentImageVulnerabilities;
-                            break; // se ha meno vulnerabilità in questa severità, è la migliore attuale
-                        } else if (currentCount > bestCount) {
-                            break; // l'immagine attuale non è migliore
-                        }
-                    }
 
                     await sleep(2000);  // Ritardo tra le scansioni
                 } catch (err) {
@@ -221,8 +202,6 @@ fs.readFile(reportPath, "utf8", async (err, data) => {
 
             const artifactClient = artifact.create();
             await artifactClient.uploadArtifact("summary-report.json", ["summary-report.json"], ".");
-
-            core.info(`L'immagine migliore è: ${bestImage}`);
 
         } else {
             core.info("Non sono stati trovati tag più recenti.");
