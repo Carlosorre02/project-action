@@ -24,6 +24,8 @@ let summaryReport = {
     imagesAnalyzed: [],
 };
 
+let vulnerabilityCounts = {}; // Contiene i conteggi per ogni immagine analizzata
+
 // Funzione per estrarre solo i CVE delle vulnerabilità separate per gravità
 const extractCveBySeverity = (vulnerabilities) => {
     const cveBySeverity = { LOW: [], MEDIUM: [], HIGH: [], CRITICAL: [] };
@@ -42,6 +44,15 @@ const processCve = (results, target) => {
     const vulnerabilities = results.Vulnerabilities || [];
     const cveBySeverity = extractCveBySeverity(vulnerabilities);
 
+    // Conta il numero di vulnerabilità per gravità
+    const countBySeverity = {
+        CRITICAL: cveBySeverity.CRITICAL.length,
+        HIGH: cveBySeverity.HIGH.length,
+        MEDIUM: cveBySeverity.MEDIUM.length,
+        LOW: cveBySeverity.LOW.length,
+    };
+
+    vulnerabilityCounts[target] = countBySeverity; // Aggiungi i conteggi al report
     return {
         target,
         vulnerabilities: cveBySeverity,
@@ -203,6 +214,10 @@ fs.readFile(reportPath, "utf8", async (err, data) => {
             const artifactClient = artifact.create();
             await artifactClient.uploadArtifact("summary-report.json", ["summary-report.json"], ".");
 
+            // Determina l'immagine migliore in base ai conteggi delle vulnerabilità
+            const bestImage = determineBestImage();
+            core.info(`L'immagine migliore è: ${bestImage}`);
+
         } else {
             core.info("Non sono stati trovati tag più recenti.");
         }
@@ -274,4 +289,24 @@ const parseTrivyReport = (image) => {
             summaryReport.imagesAnalyzed.push(processedCve);
         }
     });
+};
+
+// Funzione per determinare l'immagine migliore
+const determineBestImage = () => {
+    let bestImage = summaryReport.baseImage;
+    let bestCounts = vulnerabilityCounts[summaryReport.baseImage];
+
+    for (const [image, counts] of Object.entries(vulnerabilityCounts)) {
+        if (
+            counts.CRITICAL < bestCounts.CRITICAL ||
+            (counts.CRITICAL === bestCounts.CRITICAL && counts.HIGH < bestCounts.HIGH) ||
+            (counts.CRITICAL === bestCounts.CRITICAL && counts.HIGH === bestCounts.HIGH && counts.MEDIUM < bestCounts.MEDIUM) ||
+            (counts.CRITICAL === bestCounts.CRITICAL && counts.HIGH === bestCounts.HIGH && counts.MEDIUM === bestCounts.MEDIUM && counts.LOW < bestCounts.LOW)
+        ) {
+            bestImage = image;
+            bestCounts = counts;
+        }
+    }
+
+    return bestImage;
 };
