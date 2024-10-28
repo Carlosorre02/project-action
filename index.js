@@ -24,7 +24,7 @@ let summaryReport = {
     imagesAnalyzed: [],
 };
 
-let vulnerabilityCounts = {}; // Contiene i conteggi per ogni immagine analizzata
+let vulnerabilityCounts = {};
 
 // Funzione per estrarre solo i CVE delle vulnerabilità separate per gravità
 const extractCveBySeverity = (vulnerabilities) => {
@@ -44,12 +44,12 @@ const processCve = (results, target) => {
     const vulnerabilities = results.Vulnerabilities || [];
     const cveBySeverity = extractCveBySeverity(vulnerabilities);
 
-    // Conta il numero di vulnerabilità per gravità
+    // Conta il numero di vulnerabilità per gravità, impostando un valore predefinito se non ci sono vulnerabilità
     const countBySeverity = {
-        CRITICAL: cveBySeverity.CRITICAL.length,
-        HIGH: cveBySeverity.HIGH.length,
-        MEDIUM: cveBySeverity.MEDIUM.length,
-        LOW: cveBySeverity.LOW.length,
+        CRITICAL: cveBySeverity.CRITICAL.length || 0,
+        HIGH: cveBySeverity.HIGH.length || 0,
+        MEDIUM: cveBySeverity.MEDIUM.length || 0,
+        LOW: cveBySeverity.LOW.length || 0,
     };
 
     vulnerabilityCounts[target] = countBySeverity; // Aggiungi i conteggi al report
@@ -214,7 +214,6 @@ fs.readFile(reportPath, "utf8", async (err, data) => {
             const artifactClient = artifact.create();
             await artifactClient.uploadArtifact("summary-report.json", ["summary-report.json"], ".");
 
-            // Determina l'immagine migliore in base ai conteggi delle vulnerabilità
             const bestImage = determineBestImage();
             core.info(`L'immagine migliore è: ${bestImage}`);
 
@@ -294,14 +293,16 @@ const parseTrivyReport = (image) => {
 // Funzione per determinare l'immagine migliore
 const determineBestImage = () => {
     let bestImage = summaryReport.baseImage;
-    let bestCounts = vulnerabilityCounts[summaryReport.baseImage];
+    let bestCounts = vulnerabilityCounts[summaryReport.baseImage] || { CRITICAL: 0, HIGH: 0, MEDIUM: 0, LOW: 0 };
 
     for (const [image, counts] of Object.entries(vulnerabilityCounts)) {
+        if (!counts) continue; // Skip undefined counts
+
         if (
-            counts.CRITICAL < bestCounts.CRITICAL ||
-            (counts.CRITICAL === bestCounts.CRITICAL && counts.HIGH < bestCounts.HIGH) ||
-            (counts.CRITICAL === bestCounts.CRITICAL && counts.HIGH === bestCounts.HIGH && counts.MEDIUM < bestCounts.MEDIUM) ||
-            (counts.CRITICAL === bestCounts.CRITICAL && counts.HIGH === bestCounts.HIGH && counts.MEDIUM === bestCounts.MEDIUM && counts.LOW < bestCounts.LOW)
+            (counts.CRITICAL < (bestCounts.CRITICAL || 0)) ||
+            (counts.CRITICAL === bestCounts.CRITICAL && counts.HIGH < (bestCounts.HIGH || 0)) ||
+            (counts.CRITICAL === bestCounts.CRITICAL && counts.HIGH === bestCounts.HIGH && counts.MEDIUM < (bestCounts.MEDIUM || 0)) ||
+            (counts.CRITICAL === bestCounts.CRITICAL && counts.HIGH === bestCounts.HIGH && counts.MEDIUM === bestCounts.MEDIUM && counts.LOW < (bestCounts.LOW || 0))
         ) {
             bestImage = image;
             bestCounts = counts;
