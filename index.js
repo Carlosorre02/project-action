@@ -67,37 +67,11 @@ fs.readFile(reportPath, "utf8", async (err, data) => {
         summaryReport.baseImage = artifactName;
         core.info(`Base Image: ${artifactName}`);
 
-        // Iterare attraverso i risultati del report per l'immagine base
-        report.Results.forEach((result) => {
-            if (result.Target) {
-                core.info(`Target: ${result.Target}`);
-
-                const relevantVulns = result.Vulnerabilities || [];
-                
-                relevantVulns.forEach((vuln) => {
-                    // Manteniamo l'output dettagliato nel workflow
-                    core.info(`Package: ${vuln.PkgName}`);
-                    core.info(`Vulnerability ID: ${vuln.VulnerabilityID}`);
-                    core.info(`Severity: ${vuln.Severity}`);
-                    core.info(`Installed Version: ${vuln.InstalledVersion}`);
-                    core.info(`Fixed Version: ${vuln.FixedVersion || "No fix available"}`);
-                    core.info("---");
-                });
-
-                if (relevantVulns.length === 0) {
-                    core.info(`Nessuna vulnerabilità trovata per ${result.Target}`);
-                }
-
-                // Aggiungi le informazioni dei CVE al report riassuntivo
-                const processedCve = processCve(result, result.Target);
-                summaryReport.imagesAnalyzed.push(processedCve);
-            }
-        });
-
-        // Estrarre il namespace e il repository dall'immagine base
+        // Estrarre il namespace, il repository e la piattaforma dall'immagine base
         const parts = artifactName.split(":")[0].split("/");
         let namespace = "library";
         let repository = parts[0];
+        let basePlatform = artifactName.includes("-") ? artifactName.split("-").pop() : "";
 
         if (parts.length === 2) {
             namespace = parts[0];
@@ -106,6 +80,7 @@ fs.readFile(reportPath, "utf8", async (err, data) => {
 
         core.info(`Namespace: ${namespace}`);
         core.info(`Repository: ${repository}`);
+        core.info(`Platform: ${basePlatform || "none specified"}`);
 
         const getTags = async (namespace, repository, currentTag) => {
             let url = `https://hub.docker.com/v2/repositories/${namespace}/${repository}/tags/?page_size=100`;
@@ -128,12 +103,17 @@ fs.readFile(reportPath, "utf8", async (err, data) => {
 
                     pageTags.forEach((tag) => {
                         const tagVersion = tag.name;
+                        const tagPlatform = tag.name.includes("-") ? tag.name.split("-").pop() : "";
 
-                        // Filtra solo i tag con la stessa major version dell'immagine base
+                        // Filtra solo i tag con la stessa major version e piattaforma dell'immagine base
                         if (
                             semver.valid(tagVersion) &&
                             semver.gt(tagVersion, currentVersion) &&
-                            semver.major(tagVersion) === parseInt(baseMajorVersion)
+                            semver.major(tagVersion) === parseInt(baseMajorVersion) &&
+                            (
+                                (basePlatform && tagPlatform === basePlatform) || // Entrambi devono avere la stessa piattaforma
+                                (!basePlatform && !tagPlatform) // Nessuno dei due ha una piattaforma
+                            )
                         ) {
                             tags.push(tag.name);
                         }
