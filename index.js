@@ -203,6 +203,9 @@ fs.readFile(reportPath, "utf8", async (err, data) => {
             const artifactClient = artifact.create();
             await artifactClient.uploadArtifact("summary-report.json", ["summary-report.json"], ".");
 
+            // Genera il log finale per l'immagine migliore
+            generateBestImageLog();
+
         } else {
             core.info("Non sono stati trovati tag più recenti.");
         }
@@ -274,4 +277,42 @@ const parseTrivyReport = (image) => {
             summaryReport.imagesAnalyzed.push(processedCve);
         }
     });
+};
+
+// Funzione per contare le vulnerabilità per gravità
+const countVulnerabilities = (cveBySeverity) => {
+    return {
+        CRITICAL: cveBySeverity.CRITICAL.length,
+        HIGH: cveBySeverity.HIGH.length,
+        MEDIUM: cveBySeverity.MEDIUM.length,
+        LOW: cveBySeverity.LOW.length,
+    };
+};
+
+// Funzione per trovare l'immagine migliore basata sul numero di vulnerabilità
+const findBestImage = () => {
+    let bestImage = summaryReport.baseImage;
+    let bestCounts = countVulnerabilities(summaryReport.imagesAnalyzed[0].vulnerabilities);
+
+    summaryReport.imagesAnalyzed.forEach((imageData) => {
+        const counts = countVulnerabilities(imageData.vulnerabilities);
+
+        if (
+            counts.CRITICAL < bestCounts.CRITICAL ||
+            (counts.CRITICAL === bestCounts.CRITICAL && counts.HIGH < bestCounts.HIGH) ||
+            (counts.CRITICAL === bestCounts.CRITICAL && counts.HIGH === bestCounts.HIGH && counts.MEDIUM < bestCounts.MEDIUM) ||
+            (counts.CRITICAL === bestCounts.CRITICAL && counts.HIGH === bestCounts.HIGH && counts.MEDIUM === bestCounts.MEDIUM && counts.LOW < bestCounts.LOW)
+        ) {
+            bestImage = imageData.target;
+            bestCounts = counts;
+        }
+    });
+
+    return bestImage;
+};
+
+// Funzione per generare il log dell'immagine migliore
+const generateBestImageLog = () => {
+    const bestImage = findBestImage();
+    core.info(`L'immagine migliore trovata è: ${bestImage}`);
 };
