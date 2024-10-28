@@ -119,12 +119,16 @@ fs.readFile(reportPath, "utf8", async (err, data) => {
             for (const [image, counts] of Object.entries(vulnerabilityCounts)) {
                 if (image !== bestImage) {
                     for (const severity of ["CRITICAL", "HIGH", "MEDIUM", "LOW"]) {
-                        if (counts[severity] < baseCounts[severity]) {
+                        // Assicurati di usare fallback 0 se la proprietà non esiste
+                        const baseSeverityCount = baseCounts[severity] || 0;
+                        const currentSeverityCount = counts[severity] || 0;
+
+                        if (currentSeverityCount < baseSeverityCount) {
                             bestImage = image;
                             baseCounts = counts;
                             tied = false;
                             break;
-                        } else if (counts[severity] > baseCounts[severity]) {
+                        } else if (currentSeverityCount > baseSeverityCount) {
                             tied = false;
                             break;
                         }
