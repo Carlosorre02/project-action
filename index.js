@@ -54,7 +54,7 @@ const parseBaseImageReport = () => {
     const report = JSON.parse(reportData);
 
     report.Results.forEach((result) => {
-        if (result.Target) {
+        if (result.Target && !result.Target.includes("Node.js")) {  // Ignora il target Node.js
             core.info(`Target: ${result.Target}`);
 
             const relevantVulns = result.Vulnerabilities || [];
@@ -255,7 +255,7 @@ const parseTrivyReport = (image) => {
     const report = JSON.parse(reportData);
 
     report.Results.forEach((result) => {
-        if (result.Target) {
+        if (result.Target && !result.Target.includes("Node.js")) {  // Ignora il target Node.js
             core.info(`Target: ${result.Target}`);
 
             const relevantVulns = result.Vulnerabilities || [];
