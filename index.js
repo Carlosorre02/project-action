@@ -48,6 +48,36 @@ const processCve = (results, target) => {
     };
 };
 
+// Funzione per parsare e visualizzare le vulnerabilità dell'immagine base
+const parseBaseImageReport = () => {
+    const reportData = fs.readFileSync(reportPath, "utf8");
+    const report = JSON.parse(reportData);
+
+    report.Results.forEach((result) => {
+        if (result.Target) {
+            core.info(`Target: ${result.Target}`);
+
+            const relevantVulns = result.Vulnerabilities || [];
+            
+            relevantVulns.forEach((vuln) => {
+                core.info(`Package: ${vuln.PkgName}`);
+                core.info(`Vulnerability ID: ${vuln.VulnerabilityID}`);
+                core.info(`Severity: ${vuln.Severity}`);
+                core.info(`Installed Version: ${vuln.InstalledVersion}`);
+                core.info(`Fixed Version: ${vuln.FixedVersion || "No fix available"}`);
+                core.info("---");
+            });
+
+            if (relevantVulns.length === 0) {
+                core.info(`Nessuna vulnerabilità trovata per ${result.Target}`);
+            }
+
+            const processedCve = processCve(result, result.Target);
+            summaryReport.imagesAnalyzed.push(processedCve);
+        }
+    });
+};
+
 fs.readFile(reportPath, "utf8", async (err, data) => {
     if (err) {
         core.setFailed(`Error reading the report: ${err.message}`);
@@ -67,7 +97,10 @@ fs.readFile(reportPath, "utf8", async (err, data) => {
         summaryReport.baseImage = artifactName;
         core.info(`Base Image: ${artifactName}`);
 
-        // Estrarre il namespace, il repository e la piattaforma dall'immagine base
+        // Esegui la scansione dell'immagine base e stampa i risultati
+        parseBaseImageReport();
+
+        // Estrarre il namespace e il repository dall'immagine base
         const parts = artifactName.split(":")[0].split("/");
         let namespace = "library";
         let repository = parts[0];
