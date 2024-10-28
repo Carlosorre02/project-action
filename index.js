@@ -185,7 +185,7 @@ fs.readFile(reportPath, "utf8", async (err, data) => {
                 try {
                     const reportFileName = `trivy-report-${image}.json`;
 
-                    await trivyScan(image, reportFileName);
+                    await trivyScan(namespace, repository, image, reportFileName);
                     await uploadArtifactForImage(reportFileName);
                     parseTrivyReport(image);
 
@@ -213,7 +213,7 @@ fs.readFile(reportPath, "utf8", async (err, data) => {
 });
 
 // Funzione per eseguire la scansione Trivy e generare il report
-const trivyScan = async (image, reportFileName) => {
+const trivyScan = async (namespace, repository, image, reportFileName) => {
     const fullImageName = `${namespace}/${repository}:${image}`;
     return new Promise((resolve, reject) => {
         exec(
