@@ -1,4 +1,4 @@
-const fs = require("fs");  
+const fs = require("fs");
 const core = require("@actions/core");
 const axios = require("axios");
 const semver = require("semver");
@@ -119,8 +119,9 @@ fs.readFile(reportPath, "utf8", async (err, data) => {
             let url = `https://hub.docker.com/v2/repositories/${namespace}/${repository}/tags/?page_size=100`;
             let tags = [];
 
-            // Estrai la major version dall'immagine base
-            const baseMajorVersion = currentTag.split(":")[1].split(".")[0];
+            // Estrai la major, minor, e patch version dall'immagine base
+            const [baseMajorVersion, baseMinorVersion, basePatchVersion] = currentTag.split(":")[1].split(".");
+            const basePlatformVersion = currentTag.includes("-") ? currentTag.split("-").pop() : "";
 
             while (url) {
                 try {
@@ -138,15 +139,11 @@ fs.readFile(reportPath, "utf8", async (err, data) => {
                         const tagVersion = tag.name;
                         const tagPlatform = tag.name.includes("-") ? tag.name.split("-").pop() : "";
 
-                        // Filtra solo i tag con la stessa major version e piattaforma dell'immagine base
+                        // Filtra solo i tag che mantengono la stessa major.minor.patch e variano solo nella piattaforma
                         if (
                             semver.valid(tagVersion) &&
-                            semver.gt(tagVersion, currentVersion) &&
-                            semver.major(tagVersion) === parseInt(baseMajorVersion) &&
-                            (
-                                (basePlatform && tagPlatform === basePlatform) || // Entrambi devono avere la stessa piattaforma
-                                (!basePlatform && !tagPlatform) // Nessuno dei due ha una piattaforma
-                            )
+                            semver.eq(tagVersion, `${baseMajorVersion}.${baseMinorVersion}.${basePatchVersion}`) && // Stessa versione di base
+                            tagPlatform > basePlatformVersion // Incrementa solo la piattaforma
                         ) {
                             tags.push(tag.name);
                         }
@@ -178,7 +175,7 @@ fs.readFile(reportPath, "utf8", async (err, data) => {
         if (availableTags.length > 0) {
             const sortedTags = sortTags(availableTags); // Ordinati in ordine crescente
             core.info("Tag disponibili ordinati:");
-            sortedTags.forEach((tag) => core.info(`  Tag: ${tag}`));
+            sortedTags.forEach((tag) => core.info(`Tag: ${tag}`));
 
             for (const image of sortedTags) {
                 core.info(`Inizio scansione per immagine: ${image}`);
