@@ -135,13 +135,12 @@ fs.readFile(reportPath, "utf8", async (err, data) => {
 
                     pageTags.forEach((tag) => {
                         const tagVersion = tag.name;
-                        
-                        // Controlla se il tag corrisponde a baseMajor.baseMinor.basePatch e varia solo nella piattaforma (es. alpine3.x)
+
+                        // Filtra solo i tag che corrispondono alla versione base e hanno un'incrementazione solo nella piattaforma
                         if (
                             tagVersion.startsWith(`${baseMajor}.${baseMinor}.${basePatch}-`) &&
-                            tagVersion.includes(basePlatformPrefix) &&
-                            semver.valid(tagVersion.split("-")[0]) &&
-                            semver.gte(tagVersion, `${baseMajor}.${baseMinor}.${basePatch}`)
+                            tagVersion.includes(`${basePlatformPrefix}.`) &&
+                            semver.valid(tagVersion.split("-")[0])
                         ) {
                             tags.push(tag.name);
                         }
@@ -160,8 +159,8 @@ fs.readFile(reportPath, "utf8", async (err, data) => {
         // Funzione di ordinamento dei tag in ordine crescente
         const sortTags = (tags) => {
             return tags.sort((a, b) => {
-                if (semver.valid(a) && semver.valid(b)) {
-                    return semver.compare(a, b); // Ordine crescente
+                if (semver.valid(a.split("-")[0]) && semver.valid(b.split("-")[0])) {
+                    return semver.compare(a.split("-")[0], b.split("-")[0]); // Ordine crescente
                 }
                 return 0;
             });
