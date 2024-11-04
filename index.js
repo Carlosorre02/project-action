@@ -119,9 +119,9 @@ fs.readFile(reportPath, "utf8", async (err, data) => {
             let url = `https://hub.docker.com/v2/repositories/${namespace}/${repository}/tags/?page_size=100`;
             let tags = [];
 
-            // Estrai la major, minor, e patch version dall'immagine base
-            const [baseMajorVersion, baseMinorVersion, basePatchVersion] = currentTag.split(":")[1].split(".");
-            const basePlatformVersion = currentTag.includes("-") ? currentTag.split("-").pop() : "";
+            // Estrai la major, minor, e patch version dall'immagine base e la piattaforma
+            const [baseMajor, baseMinor, basePatch] = currentTag.split(":")[1].split(".").slice(0, 3);
+            const basePlatformPrefix = currentTag.includes("-") ? currentTag.split("-").pop().split(".")[0] : "";
 
             while (url) {
                 try {
@@ -133,17 +133,15 @@ fs.readFile(reportPath, "utf8", async (err, data) => {
                         process.exit(1);
                     }
 
-                    const currentVersion = currentTag.split(":")[1];
-
                     pageTags.forEach((tag) => {
                         const tagVersion = tag.name;
-                        const tagPlatform = tag.name.includes("-") ? tag.name.split("-").pop() : "";
-
-                        // Filtra solo i tag che mantengono la stessa major.minor.patch e variano solo nella piattaforma
+                        
+                        // Controlla se il tag corrisponde a baseMajor.baseMinor.basePatch e varia solo nella piattaforma (es. alpine3.x)
                         if (
-                            semver.valid(tagVersion) &&
-                            semver.eq(tagVersion, `${baseMajorVersion}.${baseMinorVersion}.${basePatchVersion}`) && // Stessa versione di base
-                            tagPlatform > basePlatformVersion // Incrementa solo la piattaforma
+                            tagVersion.startsWith(`${baseMajor}.${baseMinor}.${basePatch}-`) &&
+                            tagVersion.includes(basePlatformPrefix) &&
+                            semver.valid(tagVersion.split("-")[0]) &&
+                            semver.gte(tagVersion, `${baseMajor}.${baseMinor}.${basePatch}`)
                         ) {
                             tags.push(tag.name);
                         }
