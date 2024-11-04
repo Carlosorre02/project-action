@@ -80,17 +80,17 @@ const parseBaseImageReport = () => {
 
 // Funzione per filtrare solo i tag che seguono lo schema desiderato
 const filterTagsForBasePattern = (tags, baseTag) => {
-    const [baseVersion, basePlatformVersion] = baseTag.split(":")[1].split("-");
-    const basePlatformPrefix = basePlatformVersion.split(".")[0]; // ad esempio "alpine3"
-    
+    const [baseVersion, basePlatformVersion] = (baseTag.split(":")[1] || "").split("-");
+    const basePlatformPrefix = basePlatformVersion ? basePlatformVersion.split(".")[0] : null;
+
     return tags.filter((tag) => {
-        const [tagVersion, tagPlatformVersion] = tag.split("-");
-        const tagPlatformPrefix = tagPlatformVersion.split(".")[0];
+        const [tagVersion, tagPlatformVersion] = tag.includes("-") ? tag.split("-") : [tag, null];
+        const tagPlatformPrefix = tagPlatformVersion ? tagPlatformVersion.split(".")[0] : null;
         
         return (
             tag.startsWith(`${baseVersion}-`) &&  // Filtra per la stessa versione base
             tagPlatformPrefix === basePlatformPrefix &&  // Filtra per lo stesso prefisso piattaforma
-            semver.gte(tagPlatformVersion.split(".")[1], basePlatformVersion.split(".")[1])  // Filtra per versione successiva
+            tagPlatformVersion && semver.gte(tagPlatformVersion.split(".")[1], basePlatformVersion.split(".")[1])  // Filtra per versione successiva
         );
     });
 };
