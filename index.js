@@ -5,7 +5,7 @@ const semver = require("semver");
 const { exec } = require("child_process");
 const artifact = require("@actions/artifact");
 
-// Funzione per aggiungere un ritardo
+// Funzione per aggiungere un ritardo (rimosso utilizzo successivo)
 const sleep = (ms) => new Promise((resolve) => setTimeout(resolve, ms));
 
 const reportPath = core.getInput("trivy-report");
@@ -188,7 +188,7 @@ fs.readFile(reportPath, "utf8", async (err, data) => {
                     await uploadArtifactForImage(reportFileName);
                     parseTrivyReport(image);
 
-                    await sleep(10000);  // Ritardo di 10 secondi tra le scansioni
+                    // Rimosso sleep tra le scansioni
                 } catch (err) {
                     core.setFailed(`Errore nella scansione di ${image}: ${err}`);
                 }
