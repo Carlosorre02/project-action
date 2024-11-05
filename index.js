@@ -192,6 +192,7 @@ fs.readFile(reportPath, "utf8", async (err, data) => {
             const artifactClient = artifact.create();
             await artifactClient.uploadArtifact("summary-report.json", ["summary-report.json"], ".");
 
+            logImagesSummary();  // Log riepilogativo delle immagini analizzate
             generateBestImageLog();
 
         } else {
@@ -203,6 +204,7 @@ fs.readFile(reportPath, "utf8", async (err, data) => {
     }
 });
 
+// Funzione per eseguire la scansione Trivy e generare il report
 const trivyScan = async (namespace, repository, image, reportFileName) => {
     const fullImageName = `${namespace}/${repository}:${image}`;
     return new Promise((resolve, reject) => {
@@ -264,6 +266,7 @@ const parseTrivyReport = (image) => {
     });
 };
 
+// Funzione per contare le vulnerabilità per gravità
 const countVulnerabilities = (cveBySeverity) => {
     return {
         CRITICAL: cveBySeverity.CRITICAL.length,
@@ -271,6 +274,20 @@ const countVulnerabilities = (cveBySeverity) => {
         MEDIUM: cveBySeverity.MEDIUM.length,
         LOW: cveBySeverity.LOW.length,
     };
+};
+
+// Funzione per generare il log riepilogativo delle immagini analizzate
+const logImagesSummary = () => {
+    core.info("Riepilogo delle immagini analizzate:");
+    summaryReport.imagesAnalyzed.forEach((imageData) => {
+        const counts = countVulnerabilities(imageData.vulnerabilities);
+        core.info(`Immagine: ${imageData.target}`);
+        core.info(`  CRITICAL: ${counts.CRITICAL}`);
+        core.info(`  HIGH: ${counts.HIGH}`);
+        core.info(`  MEDIUM: ${counts.MEDIUM}`);
+        core.info(`  LOW: ${counts.LOW}`);
+        core.info("---");
+    });
 };
 
 const findBestImage = () => {
