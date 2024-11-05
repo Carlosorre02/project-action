@@ -120,7 +120,7 @@ fs.readFile(reportPath, "utf8", async (err, data) => {
             let tags = [];
 
             // Estrai la versione base e la piattaforma con versione dall'immagine base
-            const [baseVersion, basePlatformVersion] = currentTag.split("-"); 
+            const [baseVersion, basePlatformVersion] = currentTag.split("-");
             const baseMajorMinorPatch = baseVersion.split(":")[1];
 
             while (url) {
@@ -137,13 +137,16 @@ fs.readFile(reportPath, "utf8", async (err, data) => {
                         const tagVersion = tag.name;
                         const [tagBaseVersion, tagPlatformVersion] = tagVersion.split("-");
 
-                        // Filtra solo i tag con lo stesso major.minor.patch e piattaforma successiva
-                        if (
-                            tagBaseVersion === baseMajorMinorPatch &&
-                            tagPlatformVersion &&
-                            semver.gt(tagPlatformVersion, basePlatformVersion)
-                        ) {
-                            tags.push(tag.name);
+                        // Filtra solo i tag con versione semantica valida
+                        if (semver.valid(tagPlatformVersion)) {
+                            // Filtra solo i tag con lo stesso major.minor.patch e piattaforma successiva
+                            if (
+                                tagBaseVersion === baseMajorMinorPatch &&
+                                tagPlatformVersion &&
+                                semver.gt(tagPlatformVersion, basePlatformVersion)
+                            ) {
+                                tags.push(tag.name);
+                            }
                         }
                     });
 
