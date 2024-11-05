@@ -133,6 +133,10 @@ fs.readFile(reportPath, "utf8", async (err, data) => {
                         process.exit(1);
                     }
 
+                    // Log temporaneo per diagnosticare i tag trovati
+                    core.info("Tags trovati:");
+                    pageTags.forEach((tag) => core.info(`  Tag trovato: ${tag.name}`));
+
                     pageTags.forEach((tag) => {
                         const tagVersion = tag.name;
                         const [tagBaseVersion, tagPlatformVersion] = tagVersion.split("-");
