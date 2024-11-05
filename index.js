@@ -5,7 +5,7 @@ const semver = require("semver");
 const { exec } = require("child_process");
 const artifact = require("@actions/artifact");
 
-// Funzione per aggiungere un ritardo (rimosso utilizzo successivo)
+// Funzione per aggiungere un ritardo
 const sleep = (ms) => new Promise((resolve) => setTimeout(resolve, ms));
 
 const reportPath = core.getInput("trivy-report");
@@ -15,7 +15,6 @@ if (!reportPath) {
     process.exit(1);
 }
 
-// Aggiungi la struttura del report riassuntivo
 let summaryReport = {
     baseImage: "",
     severity: "LOW, MEDIUM, HIGH, CRITICAL",
@@ -24,7 +23,6 @@ let summaryReport = {
     imagesAnalyzed: [],
 };
 
-// Funzione per estrarre solo i CVE delle vulnerabilità separate per gravità
 const extractCveBySeverity = (vulnerabilities) => {
     const cveBySeverity = { LOW: [], MEDIUM: [], HIGH: [], CRITICAL: [] };
 
@@ -37,7 +35,6 @@ const extractCveBySeverity = (vulnerabilities) => {
     return cveBySeverity;
 };
 
-// Funzione per iterare attraverso i risultati e separare solo i CVE per gravità
 const processCve = (results, target) => {
     const vulnerabilities = results.Vulnerabilities || [];
     const cveBySeverity = extractCveBySeverity(vulnerabilities);
@@ -48,7 +45,6 @@ const processCve = (results, target) => {
     };
 };
 
-// Funzione per parsare e visualizzare le vulnerabilità dell'immagine base
 const parseBaseImageReport = () => {
     const reportData = fs.readFileSync(reportPath, "utf8");
     const report = JSON.parse(reportData);
@@ -93,14 +89,11 @@ fs.readFile(reportPath, "utf8", async (err, data) => {
             process.exit(1);
         }
 
-        // Imposta l'immagine base nel report riassuntivo
         summaryReport.baseImage = artifactName;
         core.info(`Base Image: ${artifactName}`);
 
-        // Esegui la scansione dell'immagine base e stampa i risultati
         parseBaseImageReport();
 
-        // Estrarre il namespace e il repository dall'immagine base
         const parts = artifactName.split(":")[0].split("/");
         let namespace = "library";
         let repository = parts[0];
@@ -119,11 +112,8 @@ fs.readFile(reportPath, "utf8", async (err, data) => {
             let url = `https://hub.docker.com/v2/repositories/${namespace}/${repository}/tags/?page_size=100`;
             let tags = [];
 
-            // Estrai il tag, la piattaforma e la versione della piattaforma dall'immagine base
-            const baseTagParts = currentTag.split(":")[1].split("-");
-            const baseImageTag = baseTagParts[0];
-            const basePlatform = baseTagParts[1].split(".")[0];
-            const basePlatformVersion = baseTagParts[1].split(".")[1] || "";
+            const baseMajorVersion = currentTag.split(":")[1].split(".")[0];
+            const currentVersion = currentTag.split(":")[1];
 
             while (url) {
                 try {
@@ -136,16 +126,17 @@ fs.readFile(reportPath, "utf8", async (err, data) => {
                     }
 
                     pageTags.forEach((tag) => {
-                        const tagParts = tag.name.split("-");
-                        const tagPlatform = tagParts[1] ? tagParts[1].split(".")[0] : "";
-                        const tagPlatformVersion = tagParts[1] ? tagParts[1].split(".")[1] || "" : "";
+                        const tagVersion = tag.name;
+                        const tagPlatform = tag.name.includes("-") ? tag.name.split("-").pop() : "";
 
-                        // Filtra i tag che hanno lo stesso IMAGE_TAG e PLATFORM
                         if (
-                            tag.name.startsWith(baseImageTag) &&
-                            tagPlatform === basePlatform &&
-                            tagPlatformVersion &&
-                            tagPlatformVersion > basePlatformVersion
+                            semver.valid(tagVersion) &&
+                            semver.gt(tagVersion, currentVersion) &&
+                            semver.major(tagVersion) === parseInt(baseMajorVersion) &&
+                            (
+                                (basePlatform && tagPlatform === basePlatform) ||
+                                (!basePlatform && !tagPlatform)
+                            )
                         ) {
                             tags.push(tag.name);
                         }
@@ -161,11 +152,10 @@ fs.readFile(reportPath, "utf8", async (err, data) => {
             return sortTags(tags);
         };
 
-        // Funzione di ordinamento dei tag in ordine crescente
         const sortTags = (tags) => {
             return tags.sort((a, b) => {
                 if (semver.valid(a) && semver.valid(b)) {
-                    return semver.compare(a, b); // Ordine crescente
+                    return semver.compare(a, b); 
                 }
                 return 0;
             });
@@ -175,7 +165,7 @@ fs.readFile(reportPath, "utf8", async (err, data) => {
         const availableTags = await getTags(namespace, repository, currentTag);
 
         if (availableTags.length > 0) {
-            const sortedTags = sortTags(availableTags); // Ordinati in ordine crescente
+            const sortedTags = sortTags(availableTags);
             core.info("Tag disponibili ordinati:");
             sortedTags.forEach((tag) => core.info(`Tag: ${tag}`));
 
@@ -188,7 +178,7 @@ fs.readFile(reportPath, "utf8", async (err, data) => {
                     await uploadArtifactForImage(reportFileName);
                     parseTrivyReport(image);
 
-                    // Rimosso sleep tra le scansioni
+                    await sleep(2000);  
                 } catch (err) {
                     core.setFailed(`Errore nella scansione di ${image}: ${err}`);
                 }
@@ -202,7 +192,6 @@ fs.readFile(reportPath, "utf8", async (err, data) => {
             const artifactClient = artifact.create();
             await artifactClient.uploadArtifact("summary-report.json", ["summary-report.json"], ".");
 
-            // Genera il log finale per l'immagine migliore
             generateBestImageLog();
 
         } else {
@@ -214,7 +203,6 @@ fs.readFile(reportPath, "utf8", async (err, data) => {
     }
 });
 
-// Funzione per eseguire la scansione Trivy e generare il report
 const trivyScan = async (namespace, repository, image, reportFileName) => {
     const fullImageName = `${namespace}/${repository}:${image}`;
     return new Promise((resolve, reject) => {
@@ -231,7 +219,6 @@ const trivyScan = async (namespace, repository, image, reportFileName) => {
     });
 };
 
-// Funzione per caricare il report Trivy come artifact
 const uploadArtifactForImage = async (reportFileName) => {
     try {
         const artifactClient = artifact.create();
@@ -247,14 +234,13 @@ const uploadArtifactForImage = async (reportFileName) => {
     }
 };
 
-// Funzione per parsare il report Trivy per ogni immagine
 const parseTrivyReport = (image) => {
     const reportPath = `trivy-report-${image}.json`;
     const reportData = fs.readFileSync(reportPath, "utf8");
     const report = JSON.parse(reportData);
 
     report.Results.forEach((result) => {
-        if (result.Target && !result.Target.includes("Node.js")) {  // Ignora il target Node.js
+        if (result.Target && !result.Target.includes("Node.js")) { 
             core.info(`Target: ${result.Target}`);
 
             const relevantVulns = result.Vulnerabilities || [];
@@ -278,7 +264,6 @@ const parseTrivyReport = (image) => {
     });
 };
 
-// Funzione per contare le vulnerabilità per gravità
 const countVulnerabilities = (cveBySeverity) => {
     return {
         CRITICAL: cveBySeverity.CRITICAL.length,
@@ -288,7 +273,6 @@ const countVulnerabilities = (cveBySeverity) => {
     };
 };
 
-// Funzione per trovare l'immagine migliore basata sul numero di vulnerabilità
 const findBestImage = () => {
     let bestImage = summaryReport.baseImage;
     let bestCounts = countVulnerabilities(summaryReport.imagesAnalyzed[0].vulnerabilities);
@@ -310,7 +294,6 @@ const findBestImage = () => {
     return bestImage;
 };
 
-// Funzione per generare il log dell'immagine migliore
 const generateBestImageLog = () => {
     const bestImage = findBestImage();
     core.info(`L'immagine migliore trovata è: ${bestImage}`);
