@@ -119,8 +119,8 @@ fs.readFile(reportPath, "utf8", async (err, data) => {
             let url = `https://hub.docker.com/v2/repositories/${namespace}/${repository}/tags/?page_size=100`;
             let tags = [];
 
-            // Estrai la major, minor, patch e la piattaforma con versione dall'immagine base
-            const [baseVersion, basePlatformVersion] = currentTag.split("-alpine"); // Cambia 'alpine' con 'platform' per un utilizzo generico
+            // Estrai la versione base e la piattaforma con versione dall'immagine base
+            const [baseVersion, basePlatformVersion] = currentTag.split("-"); 
             const baseMajorMinorPatch = baseVersion.split(":")[1];
 
             while (url) {
@@ -135,7 +135,7 @@ fs.readFile(reportPath, "utf8", async (err, data) => {
 
                     pageTags.forEach((tag) => {
                         const tagVersion = tag.name;
-                        const [tagBaseVersion, tagPlatformVersion] = tagVersion.split("-alpine");
+                        const [tagBaseVersion, tagPlatformVersion] = tagVersion.split("-");
 
                         // Filtra solo i tag con lo stesso major.minor.patch e piattaforma successiva
                         if (
@@ -160,8 +160,8 @@ fs.readFile(reportPath, "utf8", async (err, data) => {
         // Funzione di ordinamento dei tag in ordine crescente
         const sortTags = (tags) => {
             return tags.sort((a, b) => {
-                const [aBase, aPlatform] = a.split("-alpine");
-                const [bBase, bPlatform] = b.split("-alpine");
+                const [aBase, aPlatform] = a.split("-");
+                const [bBase, bPlatform] = b.split("-");
                 return semver.compare(aPlatform, bPlatform); // Ordina in base alla piattaforma
             });
         };
